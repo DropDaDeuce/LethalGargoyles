@@ -5,12 +5,12 @@ schemaVersion = "0.0.1"
 repository = "https://thunderstore.io"
 
 [package]
-description = "Example Enemy for Lethal Company."
-websiteUrl = "https://github.com/Hamunii/LC-ExampleEnemy"
+description = "My first project and enemy for Lethal Company! This is an attempt to create an enemy that roams the map taunting you."
+websiteUrl = "https://github.com/DropDaDeuce/LethalGargoyles"
 containsNsfwContent = false
 [package.dependencies]
 BepInEx-BepInExPack = "5.4.2100"
-Evaisa-LethalLib = "0.15.1"
+Evaisa-LethalLib = "0.16.1"
 
 [build]
 icon = "./icon.png"
@@ -18,12 +18,12 @@ readme = "./README.md"
 outdir = "./Packages"
 
 [[build.copy]]
-source = "../bin/Release/netstandard2.1/Hamunii.ExampleEnemy.dll"
-target = "plugins/ExampleEnemy/"
+source = "../bin/Release/netstandard2.1/DropDaDeuce.LethalGargoyles.dll"
+target = "plugins/LethalGargoyles/"
 
 [[build.copy]]
 source = "../../UnityProject/AssetBundles/StandaloneWindows/modassets"
-target = "plugins/ExampleEnemy/"
+target = "plugins/LethalGargoyles/"
 
 [[build.copy]]
 source = "./CHANGELOG.md"
