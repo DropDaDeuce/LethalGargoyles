@@ -1,0 +1,7 @@
+ManifestFileVersion: 0
+CRC: 3937706982
+AssetBundleManifest:
+  AssetBundleInfos:
+    Info_0:
+      Name: modassets
+      Dependencies: {}
