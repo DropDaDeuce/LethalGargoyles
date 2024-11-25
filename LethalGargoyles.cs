@@ -1,14 +1,10 @@
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
-using LobbyCompatibility.Attributes;
-using LobbyCompatibility.Enums;
 
 namespace LethalGargoyles;
 
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
-[BepInDependency("BMX.LobbyCompatibility", BepInDependency.DependencyFlags.HardDependency)]
-[LobbyCompatibility(CompatibilityLevel.ClientOnly, VersionStrictness.None)]
 public class LethalGargoyles : BaseUnityPlugin
 {
     public static LethalGargoyles Instance { get; private set; } = null!;
