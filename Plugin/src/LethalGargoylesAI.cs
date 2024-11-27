@@ -16,14 +16,10 @@ namespace LethalGargoyles
     {
         // We set these in our Asset Bundle, so we can disable warning CS0649:
         // Field 'field' is never assigned to, and will always have its default value 'value'
-#pragma warning disable 0649
+        #pragma warning disable 0649
         public Transform turnCompass = null!;
         public Transform attackArea = null!;
-#pragma warning restore 0649
-        float timeSinceHittingLocalPlayer;
-        float timeSinceNewRandPos;
-        Vector3 positionRandomness;
-        Vector3 StalkPos;
+        #pragma warning restore 0649
         System.Random enemyRandom = null!;
         bool isDeadAnimationDone;
         enum State
@@ -112,7 +108,9 @@ namespace LethalGargoyles
 
         public void PlayTaunt()
         {
-
+            //Play Random Clip
+            DoAnimationClientRpc("startWalk");
+            SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
         }
 
         bool FoundClosestPlayerInRange(float range, float senseRange)
