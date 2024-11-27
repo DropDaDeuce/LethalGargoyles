@@ -39,7 +39,6 @@ namespace LethalGargoyles
         {
             base.Start();
             LogIfDebugBuild("Gargoyle Spawned");
-            timeSinceHittingLocalPlayer = 0;
             creatureAnimator.SetTrigger("startWalk");
 
             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
@@ -93,6 +92,7 @@ namespace LethalGargoyles
                         return;
                     }
                     SetDestinationToPosition(targetPlayer.transform.position);
+                    SwitchToBehaviourServerRpc((int)State.SearchingForPlayer);
                     break;
 
                 case (int)State.PlayTaunt:

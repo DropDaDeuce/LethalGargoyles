@@ -1,22 +1,20 @@
 ManifestFileVersion: 0
-CRC: 2573687109
+CRC: 3933109896
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: ccc67eab49f10384c6ca4766e7dc0d50
+    Hash: 68f84b910e24144a679575db4bb68fe3
   TypeTreeHash:
     serializedVersion: 2
-    Hash: 5a2f2b9a14f2d2cf65093211e2253c80
+    Hash: 38061fb2a00997b8d027492a5b7ea189
   IncrementalBuildHash:
     serializedVersion: 2
-    Hash: ccc67eab49f10384c6ca4766e7dc0d50
+    Hash: 68f84b910e24144a679575db4bb68fe3
 HashAppended: 0
 ClassTypes:
 - Class: 1
   Script: {instanceID: 0}
 - Class: 4
-  Script: {instanceID: 0}
-- Class: 20
   Script: {instanceID: 0}
 - Class: 21
   Script: {instanceID: 0}
@@ -34,14 +32,14 @@ ClassTypes:
   Script: {instanceID: 0}
 - Class: 65
   Script: {instanceID: 0}
+- Class: 74
+  Script: {instanceID: 0}
 - Class: 82
   Script: {instanceID: 0}
 - Class: 91
   Script: {instanceID: 0}
 - Class: 95
   Script: {instanceID: 0}
-- Class: 114
-  Script: {fileID: 11500000, guid: 23c1ce4fb46143f46bc5cb5224c934f6, type: 3}
 - Class: 114
   Script: {fileID: -1753980398, guid: e0a89e6f23bd69e40ab1b6cd831745f1, type: 3}
 - Class: 114
@@ -77,18 +75,6 @@ SerializeReferenceClassIdentifiers:
   ClassName: EnemyBehaviourState
 - AssemblyName: Assembly-CSharp
   ClassName: NavSizeLimit
-- AssemblyName: Unity.RenderPipelines.Core.Runtime
-  ClassName: UnityEngine.Rendering.BitArray128
-- AssemblyName: Unity.RenderPipelines.HighDefinition.Runtime
-  ClassName: UnityEngine.Rendering.HighDefinition.FrameSettings
-- AssemblyName: Unity.RenderPipelines.HighDefinition.Runtime
-  ClassName: UnityEngine.Rendering.HighDefinition.FrameSettingsOverrideMask
-- AssemblyName: Unity.RenderPipelines.HighDefinition.Runtime
-  ClassName: UnityEngine.Rendering.HighDefinition.HDPhysicalCamera
-- AssemblyName: Unity.RenderPipelines.HighDefinition.Runtime
-  ClassName: UnityEngine.Rendering.HighDefinition.ObsoleteFrameSettings
-- AssemblyName: Unity.RenderPipelines.HighDefinition.Runtime
-  ClassName: UnityEngine.Rendering.HighDefinition.ObsoleteLightLoopSettings
 Assets:
 - Assets/ModAssets/LethalGargoyle/Materials/Eyes.mat
 - Assets/ModAssets/LethalGargoyle/LethalGargoyle.asset
