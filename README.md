@@ -4,7 +4,7 @@ The Gargoyle model was extracted from the game Fable III and prepared for printi
 
 This model is available for use under https://creativecommons.org/licenses/by-nc/4.0/
 
-    - Attribution: [CharlieVet]([https://cults3d.com/en/3d-model/game/gargoyle-on-edge]) Modified by DropDaDeuce
+    - Attribution: [CharlieVet]([https://cults3d.com/en/3d-model/game/gargoyle-on-edge]) Modified by DropDaDeuce & Syiacka
     - License: Creative Commons Attribution-NonCommercial 4.0 International
         - You are free to:
             - Share — copy and redistribute the material in any medium or format
