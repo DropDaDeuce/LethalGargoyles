@@ -29,8 +29,8 @@ namespace LethalGargoyles
         enum State
         {
             SearchingForPlayer,
-            StickingInFrontOfPlayer,
-            HeadSwingAttackInProgress,
+            ChasingPlayer,
+            PlayTaunt,
         }
 
         [Conditional("DEBUG")]
@@ -45,13 +45,8 @@ namespace LethalGargoyles
             LogIfDebugBuild("Gargoyle Spawned");
             timeSinceHittingLocalPlayer = 0;
             creatureAnimator.SetTrigger("startWalk");
-            timeSinceNewRandPos = 0;
-            positionRandomness = new Vector3(0, 0, 0);
-            enemyRandom = new System.Random(StartOfRound.Instance.randomMapSeed + thisEnemyIndex);
-            isDeadAnimationDone = false;
-            // NOTE: Add your behavior states in your enemy script in Unity, where you can configure fun stuff
-            // like a voice clip or an sfx clip to play when changing to that specific behavior state.
-            currentBehaviourStateIndex = (int)State.SearchingForPlayer;
+
+            SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
             // We make the enemy start searching. This will make it start wandering around.
             StartSearch(transform.position);
         }
@@ -63,27 +58,11 @@ namespace LethalGargoyles
             {
                 // For some weird reason I can't get an RPC to get called from HitEnemy() (works from other methods), so we do this workaround. We just want the enemy to stop playing the song.
                 if (!isDeadAnimationDone)
-                {
-                    LogIfDebugBuild("Stopping enemy voice with janky code.");
-                    isDeadAnimationDone = true;
-                    creatureVoice.Stop();
-                    creatureVoice.PlayOneShot(dieSFX);
-                }
                 return;
             }
-            timeSinceHittingLocalPlayer += Time.deltaTime;
-            timeSinceNewRandPos += Time.deltaTime;
 
             var state = currentBehaviourStateIndex;
-            if (targetPlayer != null && (state == (int)State.StickingInFrontOfPlayer || state == (int)State.HeadSwingAttackInProgress))
-            {
-                turnCompass.LookAt(targetPlayer.gameplayCamera.transform.position);
-                transform.rotation = Quaternion.Lerp(transform.rotation, Quaternion.Euler(new Vector3(0f, turnCompass.eulerAngles.y, 0f)), 4f * Time.deltaTime);
-            }
-            if (stunNormalizedTimer > 0f)
-            {
-                agent.speed = 0f;
-            }
+            if (targetPlayer == null) return;
         }
 
         public override void DoAIInterval()
@@ -98,36 +77,42 @@ namespace LethalGargoyles
             switch (currentBehaviourStateIndex)
             {
                 case (int)State.SearchingForPlayer:
-                    agent.speed = 3f;
+                    agent.speed = 2f;
                     if (FoundClosestPlayerInRange(25f, 3f))
                     {
                         LogIfDebugBuild("Start Target Player");
                         StopSearch(currentSearch);
-                        SwitchToBehaviourClientRpc((int)State.StickingInFrontOfPlayer);
+                        SwitchToBehaviourClientRpc((int)State.ChasingPlayer);
                     }
                     break;
 
-                case (int)State.StickingInFrontOfPlayer:
-                    agent.speed = 5f;
+                case (int)State.ChasingPlayer:
+                    agent.speed = 2f * 2f;
                     // Keep targeting closest player, unless they are over 20 units away and we can't see them.
                     if (!TargetClosestPlayerInAnyCase() || Vector3.Distance(transform.position, targetPlayer.transform.position) > 20 && !CheckLineOfSightForPosition(targetPlayer.transform.position))
                     {
                         LogIfDebugBuild("Stop Target Player");
                         StartSearch(transform.position);
-                        SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
+                        SwitchToBehaviourServerRpc((int)State.SearchingForPlayer);
                         return;
                     }
-                    StickingInFrontOfPlayer();
+                    SetDestinationToPosition(targetPlayer.transform.position);
                     break;
 
-                case (int)State.HeadSwingAttackInProgress:
-                    // We don't care about doing anything here
+                case (int)State.PlayTaunt:
+                    agent.speed = 0f;
+                    //todo add random play sound
                     break;
 
                 default:
                     LogIfDebugBuild("This Behavior State doesn't exist!");
                     break;
             }
+        }
+
+        public void PlayTaunt()
+        {
+
         }
 
         bool FoundClosestPlayerInRange(float range, float senseRange)
@@ -159,66 +144,13 @@ namespace LethalGargoyles
             return true;
         }
 
-        void StickingInFrontOfPlayer()
-        {
-            // We only run this method for the host because I'm paranoid about randomness not syncing I guess
-            // This is fine because the game does sync the position of the enemy.
-            // Also the attack is a ClientRpc so it should always sync
-            if (targetPlayer == null || !IsOwner)
-            {
-                return;
-            }
-            if (timeSinceNewRandPos > 0.7f)
-            {
-                timeSinceNewRandPos = 0;
-                if (enemyRandom.Next(0, 5) == 0)
-                {
-                    // Attack
-                    StartCoroutine(SwingAttack());
-                }
-                else
-                {
-                    // Go in front of player
-                    positionRandomness = new Vector3(enemyRandom.Next(-2, 2), 0, enemyRandom.Next(-2, 2));
-                    StalkPos = targetPlayer.transform.position - Vector3.Scale(new Vector3(-5, 0, -5), targetPlayer.transform.forward) + positionRandomness;
-                }
-                SetDestinationToPosition(StalkPos, checkForPath: false);
-            }
-        }
-
-        IEnumerator SwingAttack()
-        {
-            SwitchToBehaviourClientRpc((int)State.HeadSwingAttackInProgress);
-            StalkPos = targetPlayer.transform.position;
-            SetDestinationToPosition(StalkPos);
-            yield return new WaitForSeconds(0.5f);
-            if (isEnemyDead)
-            {
-                yield break;
-            }
-            DoAnimationClientRpc("swingAttack");
-            yield return new WaitForSeconds(0.35f);
-            SwingAttackHitClientRpc();
-            // In case the player has already gone away, we just yield break (basically same as return, but for IEnumerator)
-            if (currentBehaviourStateIndex != (int)State.HeadSwingAttackInProgress)
-            {
-                yield break;
-            }
-            SwitchToBehaviourClientRpc((int)State.StickingInFrontOfPlayer);
-        }
-
         public override void OnCollideWithPlayer(Collider other)
         {
-            if (timeSinceHittingLocalPlayer < 1f)
-            {
-                return;
-            }
             PlayerControllerB playerControllerB = MeetsStandardPlayerCollisionConditions(other);
             if (playerControllerB != null)
             {
                 LogIfDebugBuild("Gargoyle Collision with Player!");
-                timeSinceHittingLocalPlayer = 0f;
-                playerControllerB.DamagePlayer(20);
+                SwitchToBehaviourClientRpc((int)State.PlayTaunt);
             }
         }
 
@@ -234,11 +166,6 @@ namespace LethalGargoyles
             {
                 if (enemyHP <= 0 && !isEnemyDead)
                 {
-                    // Our death sound will be played through creatureVoice when KillEnemy() is called.
-                    // KillEnemy() will also attempt to call creatureAnimator.SetTrigger("KillEnemy"),
-                    // so we don't need to call a death animation ourselves.
-
-                    StopCoroutine(SwingAttack());
                     // We need to stop our search coroutine, because the game does not do that by default.
                     StopCoroutine(searchCoroutine);
                     KillEnemyOnOwnerClient();
@@ -251,27 +178,6 @@ namespace LethalGargoyles
         {
             LogIfDebugBuild($"Animation: {animationName}");
             creatureAnimator.SetTrigger(animationName);
-        }
-
-        [ClientRpc]
-        public void SwingAttackHitClientRpc()
-        {
-            LogIfDebugBuild("SwingAttackHitClientRPC");
-            int playerLayer = 1 << 3; // This can be found from the game's Asset Ripper output in Unity
-            Collider[] hitColliders = Physics.OverlapBox(attackArea.position, attackArea.localScale, Quaternion.identity, playerLayer);
-            if (hitColliders.Length > 0)
-            {
-                foreach (var player in hitColliders)
-                {
-                    PlayerControllerB playerControllerB = MeetsStandardPlayerCollisionConditions(player);
-                    if (playerControllerB != null)
-                    {
-                        LogIfDebugBuild("Swing attack hit player!");
-                        timeSinceHittingLocalPlayer = 0f;
-                        playerControllerB.DamagePlayer(40);
-                    }
-                }
-            }
         }
     }
 }

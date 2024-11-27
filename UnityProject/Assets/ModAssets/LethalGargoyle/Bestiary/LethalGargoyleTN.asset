@@ -15,15 +15,15 @@ MonoBehaviour:
   displayText: 'Gargoyle
 
 
-    Sigurd''s danger level: ?%
+    Sigurd''s danger level: Nuisance
 
 
-    Scientific name:
-    Lethalis Gargulus
+    Scientific
+    name: Lethalis Gargulus
 
 
-    It mocks me. No matter where I go it follows and mocks
-    me. - Sigurd'
+    It mocks me. No matter where I go it follows and
+    mocks me. - Sigurd'
   terminalEvent: 
   clearPreviousText: 1
   maxCharactersToType: 35

@@ -1,7 +1,7 @@
 ManifestFileVersion: 0
-CRC: 3020446635
+CRC: 2501332471
 AssetBundleManifest:
   AssetBundleInfos:
     Info_0:
-      Name: modassets
+      Name: gargoyleassets
       Dependencies: {}
