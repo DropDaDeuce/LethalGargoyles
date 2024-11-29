@@ -42,6 +42,8 @@ namespace LethalGargoyles
         private float attackRange = 0f;
         private int attackDamage = 0;
         private float aggroRange = 0f;
+        private int minTaunt = 0;
+        private int maxTaunt = 0;
 
         enum State
         {
@@ -73,6 +75,9 @@ namespace LethalGargoyles
             attackDamage = Plugin.BoundConfig.attackDamage.Value;
             aggroRange = Plugin.BoundConfig.aggroRange.Value;
             idleDistance = Plugin.BoundConfig.idleDistance.Value;
+            minTaunt = Plugin.BoundConfig.minTaunt.Value;
+            maxTaunt = Plugin.BoundConfig.maxTaunt.Value;
+
             creatureVoice.maxDistance = creatureVoice.maxDistance * 4;
         }
 
@@ -332,7 +337,7 @@ namespace LethalGargoyles
                 LogIfDebugBuild("Taunting");
                 creatureVoice.PlayOneShot(Plugin.tauntClips[randomIndex]);
                 lastTauntTime = Time.time;
-                randTime = Random.Range(15, 45);
+                randTime = Random.Range(minTaunt, maxTaunt);
             }
             else
             {

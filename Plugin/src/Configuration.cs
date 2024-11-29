@@ -13,6 +13,8 @@ namespace LethalGargoyles.Configuration {
         public ConfigEntry<int> attackDamage;
         public ConfigEntry<int> aggroRange;
         public ConfigEntry<int> idleDistance;
+        public ConfigEntry<int> minTaunt;
+        public ConfigEntry<int> maxTaunt;
 
         public PluginConfig(ConfigFile cfg)
         {
@@ -45,6 +47,14 @@ namespace LethalGargoyles.Configuration {
                                    "Idle Distance",
                                    20,
                                    "The distance in which the Gargoyle will stay idle if not seen.");
+            minTaunt = cfg.Bind("General",
+                                   "Min Taunt",
+                                   15,
+                                   "The minimum amount of time in seconds to wait between taunts.");
+            maxTaunt = cfg.Bind("General",
+                                   "Max Taunt",
+                                   45,
+                                   "The maximum amount of time in seconds to wait between taunts.");
 
             ClearUnusedEntries(cfg);
         }
