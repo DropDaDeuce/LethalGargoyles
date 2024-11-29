@@ -6,6 +6,7 @@ using System.IO;
 using System.Reflection;
 using UnityEngine;
 using LethalGargoyles.Configuration;
+using System.Collections.Generic;
 
 namespace LethalGargoyles {
     [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
@@ -16,8 +17,11 @@ namespace LethalGargoyles {
         internal static Harmony? Harmony { get; set; }
         internal static PluginConfig BoundConfig { get; private set; } = null!;
         public static AssetBundle? ModAssets;
+        public static List<AudioClip> tauntClips = new List<AudioClip>();
 
+#pragma warning disable IDE0051 // Remove unused private members
         private void Awake()
+#pragma warning restore IDE0051 // Remove unused private members
         {
             Logger = base.Logger;
 
@@ -43,6 +47,7 @@ namespace LethalGargoyles {
             var LethalGargoyle = ModAssets.LoadAsset<EnemyType>("LethalGargoyle");
             var LethalGargoyleTN = ModAssets.LoadAsset<TerminalNode>("LethalGargoyleTN");
             var LethalGargoyleTK = ModAssets.LoadAsset<TerminalKeyword>("LethalGargoyleTK");
+            LoadTauntClips();
 
             // Optionally, we can list which levels we want to add our enemy to, while also specifying the spawn weight for each.
             /*
@@ -75,7 +80,6 @@ namespace LethalGargoyles {
             // Enemies.RegisterEnemy(LethalGargoyle, LethalGargoyleLevelRarities, LethalGargoyleCustomLevelRarities, LethalGargoyleTN, LethalGargoyleTK);
             Instance = this;
 
-            Patch();
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
         }
 
@@ -97,24 +101,21 @@ namespace LethalGargoyles {
             }
         }
 
-        internal static void Patch()
+        void LoadTauntClips()
         {
-            Harmony ??= new Harmony(PluginInfo.PLUGIN_GUID);
+            // Assuming ModAssets is the loaded AssetBundle
+            if (ModAssets != null)
+            {
+                AudioClip[] allClips = ModAssets.LoadAllAssets<AudioClip>();
 
-            Logger.LogDebug("Patching...");
-
-            Harmony.PatchAll();
-
-            Logger.LogDebug("Finished patching!");
-        }
-
-        internal static void Unpatch()
-        {
-            Logger.LogDebug("Unpatching...");
-
-            Harmony?.UnpatchSelf();
-
-            Logger.LogDebug("Finished unpatching!");
+                foreach (AudioClip clip in allClips)
+                {
+                    if (clip.name.StartsWith("taunt")) // Adjust the filter as needed
+                    {
+                        tauntClips.Add(clip);
+                    }
+                }
+            }
         }
     }
 }

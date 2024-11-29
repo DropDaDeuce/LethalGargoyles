@@ -68,8 +68,8 @@ MonoBehaviour:
   requireNestObjectsToSpawn: 0
   enemyPrefab: {fileID: 7115615282760060981, guid: 1e1fa11ed9aee9bce87f5f5cf5afcabb,
     type: 3}
-  PowerLevel: 1
-  MaxCount: 2
+  PowerLevel: 0.5
+  MaxCount: 3
   numberSpawned: 2
   nestsSpawned: 0
   isOutsideEnemy: 0
@@ -83,7 +83,7 @@ MonoBehaviour:
   canDie: 1
   canBeDestroyed: 0
   destroyOnDeath: 0
-  canSeeThroughFog: 0
+  canSeeThroughFog: 1
   pushPlayerForce: 2
   pushPlayerDistance: 2
   SizeLimit: 0
