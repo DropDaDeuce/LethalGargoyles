@@ -18,6 +18,9 @@ namespace LethalGargoyles {
         internal static PluginConfig BoundConfig { get; private set; } = null!;
         public static AssetBundle? ModAssets;
         public static List<AudioClip> tauntClips = new List<AudioClip>();
+        public static List<AudioClip> aggroClips = new List<AudioClip>();
+        public static List<AudioClip> hideClips = new List<AudioClip>();
+        public static List<AudioClip> seenClips = new List<AudioClip>();
 
 #pragma warning disable IDE0051 // Remove unused private members
         private void Awake()
@@ -47,7 +50,7 @@ namespace LethalGargoyles {
             var LethalGargoyle = ModAssets.LoadAsset<EnemyType>("LethalGargoyle");
             var LethalGargoyleTN = ModAssets.LoadAsset<TerminalNode>("LethalGargoyleTN");
             var LethalGargoyleTK = ModAssets.LoadAsset<TerminalKeyword>("LethalGargoyleTK");
-            LoadTauntClips();
+            LoadClips();
 
             // Optionally, we can list which levels we want to add our enemy to, while also specifying the spawn weight for each.
             /*
@@ -101,18 +104,30 @@ namespace LethalGargoyles {
             }
         }
 
-        void LoadTauntClips()
+        void LoadClips()
         {
             // Assuming ModAssets is the loaded AssetBundle
             if (ModAssets != null)
             {
                 AudioClip[] allClips = ModAssets.LoadAllAssets<AudioClip>();
-
+                
                 foreach (AudioClip clip in allClips)
                 {
-                    if (clip.name.StartsWith("taunt")) // Adjust the filter as needed
+                    if (clip.name.StartsWith("taunt_general")) // Adjust the filter as needed
                     {
                         tauntClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("taunt_aggro"))
+                    {
+                        aggroClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("taunt_seen")) 
+                    {
+                        seenClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("taunt_hide")) 
+                    {
+                        hideClips.Add(clip);
                     }
                 }
             }

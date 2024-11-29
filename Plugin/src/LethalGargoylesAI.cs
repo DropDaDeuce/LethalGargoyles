@@ -31,10 +31,23 @@ namespace LethalGargoyles
 
         PlayerControllerB closestPlayer = null!;
 
-        private float randTime = 0f;
+        private float randGenTauntTime = 0f;
+        private float randAgrTauntTime = 0f;
+        private float randSeenTauntTime = 0f;
+        private float randHideTauntTime = 0f;
+
+        
+        private float lastGenTauntTime = 0f;
+        private float lastAgrTauntTime = 0f;
+        private float lastSeenTauntTime = 0f;
+        private float lastHideTauntTime = 0f;
+
+        private int lastGenTaunt = -1;
+        private int lastAgrTaunt = -1;
+        private int lastSeenTaunt = -1;
+        private int lastHideTaunt = -1;
+
         private float timeSinceHittingPlayer;
-        private float lastTauntTime = 0f;
-        private int lastTaunt = -1;
         private float distanceToPlayer = 0f;
         private float distanceToClosestPlayer = 0f;
         private float idleDistance = 0f;
@@ -87,7 +100,6 @@ namespace LethalGargoyles
             if (isEnemyDead) return;
 
             bool isSeen = GargoyleIsSeen(base.transform);
-
             if (isSeen && currentBehaviourStateIndex != (int)State.AggressivePursuit)
             {
 
@@ -118,6 +130,14 @@ namespace LethalGargoyles
                 SwitchToBehaviourClientRpc((int)State.Idle);
             }
 
+            if (previousBehaviourStateIndex == (int)State.GetOutOfSight && currentBehaviourStateIndex == (int)State.Idle)
+            {
+                if (Time.time - lastHideTauntTime >= randHideTauntTime)
+                {
+                    OtherTaunt(Plugin.hideClips, "Hide", ref lastHideTaunt, ref lastHideTauntTime, ref randHideTauntTime);
+                }
+            }
+
             if (targetPlayer != null)
             {
                 distanceToPlayer = Vector3.Distance(base.transform.position, targetPlayer.transform.position);
@@ -142,11 +162,11 @@ namespace LethalGargoyles
                         {
                             LogIfDebugBuild("Target Player Left The Facility. Switching Targets");
                             StartSearch(transform.position);
-                            lastTauntTime = 0f;
+                            lastGenTauntTime = 0f;
                             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                             return;
                         }
-                        if (Time.time - lastTauntTime >= randTime)
+                        if (Time.time - lastGenTauntTime >= randGenTauntTime)
                         {
                             Taunt();
                         }
@@ -177,7 +197,7 @@ namespace LethalGargoyles
                         {
                             LogIfDebugBuild("Target Player Left The Facility. Switching Targets");
                             StartSearch(transform.position);
-                            lastTauntTime = 0f;
+                            lastGenTauntTime = 0f;
                             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                             return;
                         }
@@ -189,7 +209,7 @@ namespace LethalGargoyles
                         }
                         else
                         {
-                            if (Time.time - lastTauntTime >= randTime)
+                            if (Time.time - lastGenTauntTime >= randGenTauntTime)
                             {
                                 Taunt();
                             }
@@ -206,7 +226,7 @@ namespace LethalGargoyles
                         {
                             LogIfDebugBuild("Target Player Left The Facility. Switching Targets");
                             StartSearch(transform.position);
-                            lastTauntTime = 0f;
+                            lastAgrTauntTime = 0f;
                             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                             return;
                         }
@@ -223,6 +243,10 @@ namespace LethalGargoyles
 
                         if (FoundClosestPlayerInRange())
                         {
+                            if (Time.time - lastAgrTauntTime >= randAgrTauntTime)
+                            {
+                                OtherTaunt(Plugin.aggroClips, "Aggro", ref lastAgrTaunt, ref lastAgrTauntTime, ref randAgrTauntTime);
+                            }
                             SetDestinationToPosition(targetPlayer.transform.position);
                             if (timeSinceHittingPlayer >= 1f && canSeePlayer)
                             {
@@ -252,6 +276,10 @@ namespace LethalGargoyles
                     if (targetPlayer != null)
                     {
                         LogIfDebugBuild("Gotta find a place to hide!");
+                        if (Time.time - lastSeenTauntTime >= randSeenTauntTime)
+                        {
+                            OtherTaunt(Plugin.seenClips, "Seen", ref lastSeenTaunt, ref lastSeenTauntTime, ref randSeenTauntTime);
+                        }
                         if (!targetPlayer.isInsideFactory)
                         {
                             if (FoundClosestPlayerInRange())
@@ -319,29 +347,51 @@ namespace LethalGargoyles
                         if (enemy.creatureVoice.isPlaying)
                         {
                             LogIfDebugBuild("Taunt canceled due to another gargoyle taunting.");
-                            lastTauntTime = Time.time;
-                            randTime = Random.Range(5, 10);
+                            lastGenTauntTime = Time.time;
+                            randGenTauntTime = Random.Range(5, 10);
                             return;
                         }
                     }
                 }
-
+                int randomIndex;
                 // Play a random taunt clip
-                int randomIndex = -1;
-
                 do
                 {
                     randomIndex = Random.Range(0, Plugin.tauntClips.Count());
-                } while (randomIndex == lastTaunt);
+                } while (randomIndex == lastGenTaunt);
 
-                LogIfDebugBuild("Taunting");
+                LogIfDebugBuild("General Taunt");
                 creatureVoice.PlayOneShot(Plugin.tauntClips[randomIndex]);
-                lastTauntTime = Time.time;
-                randTime = Random.Range(minTaunt, maxTaunt);
+                lastGenTauntTime = Time.time;
+                randGenTauntTime = Random.Range(minTaunt, maxTaunt);
             }
             else
             {
-                LogIfDebugBuild("TAUNTS ARE NULL! WHY!?");
+                LogIfDebugBuild("GENERAL TAUNTS ARE NULL! WHY!?");
+                return;
+            }
+        }
+
+        public void OtherTaunt(List<AudioClip> clips, string clipType, ref int lastTaunt, ref float lastTauntTime, ref float randTime)
+        {
+            if (clips != null)
+            {
+
+                // Play a random taunt clip
+                int randomIndex;
+                do
+                {
+                    randomIndex = Random.Range(0, clips.Count());
+                } while (randomIndex == lastTaunt);
+
+                LogIfDebugBuild(clipType + "Taunt");
+                creatureVoice.PlayOneShot(clips[randomIndex]);
+                lastTauntTime = Time.time;
+                randTime = Random.Range(minTaunt, (int)(maxTaunt / 2));
+            }
+            else
+            {
+                LogIfDebugBuild(clipType + " TAUNTS ARE NULL! WHY!?");
                 return;
             }
         }

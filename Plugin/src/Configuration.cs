@@ -54,7 +54,7 @@ namespace LethalGargoyles.Configuration {
             maxTaunt = cfg.Bind("General",
                                    "Max Taunt",
                                    45,
-                                   "The maximum amount of time in seconds to wait between taunts.");
+                                   "The maximum amount of time in seconds to wait between general taunts. Other types of taunts will be half this number.");
 
             ClearUnusedEntries(cfg);
         }
