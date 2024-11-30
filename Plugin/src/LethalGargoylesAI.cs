@@ -140,7 +140,7 @@ namespace LethalGargoyles
                 SwitchToBehaviourClientRpc((int)State.Idle);
             }
 
-            if (!isSeen)
+            /*if (!isSeen)
             {
                 if (wasSeen && !creatureVoice.isPlaying)
                 {
@@ -152,7 +152,7 @@ namespace LethalGargoyles
                     wasSeen = true;
                     OtherTaunt(Plugin.seenClips, "Seen", ref lastSeenTaunt, ref lastSeenTauntTime, ref randSeenTauntTime);
                 }
-            }
+            }*/
 
             if (targetPlayer != null)
             {

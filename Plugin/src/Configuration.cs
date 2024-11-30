@@ -21,7 +21,7 @@ namespace LethalGargoyles.Configuration {
         {
             SpawnWeight = cfg.Bind("General", //Main Catagory
                                    "Spawn weight", //SubCatagory
-                                   100, //Value
+                                   50, //Value
                                    "The spawn chance weight for the Gargoyle, relative to other existing enemies.\n" + //Description
                                    "Goes up from 0, lower is more rare, 100 and up is very common.");
 
