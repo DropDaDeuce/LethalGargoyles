@@ -139,7 +139,6 @@ namespace LethalGargoyles {
                     else if (clip.name.StartsWith("taunt_enemy"))
                     {
                         tauntClips.Add(clip);
-                        enemyClips.Add(clip);
                     }
                     else if (clip.name.StartsWith("taunt_playerdeath"))
                     {

@@ -16,6 +16,7 @@ namespace LethalGargoyles.Configuration {
         public ConfigEntry<int> minTaunt;
         public ConfigEntry<int> maxTaunt;
         public ConfigEntry<int> distWarn;
+        public ConfigEntry<int> bufferDist;
 
         public PluginConfig(ConfigFile cfg)
         {
@@ -46,7 +47,7 @@ namespace LethalGargoyles.Configuration {
                                    "The range in which the Gargoyle will agro.");
             idleDistance = cfg.Bind("General",
                                    "Idle Distance",
-                                   20,
+                                   30,
                                    "The distance in which the Gargoyle will stay idle if not seen.");
             minTaunt = cfg.Bind("General",
                                    "Min Taunt",
@@ -60,6 +61,10 @@ namespace LethalGargoyles.Configuration {
                                    "Enemy Distance Warning",
                                    45,
                                    "The distance at which a gargoyle will warn players about enemies with his taunts. This taunt is set to a 20% chance to play if an enemy is near the gargoyle, and not all enemy warnings are real!");
+            bufferDist = cfg.Bind("General",
+                                   "Buffer Distance",
+                                   12,
+                                   "How much buffer the Gargoyle will try to keep between him and the target player.");
 
             ClearUnusedEntries(cfg);
         }

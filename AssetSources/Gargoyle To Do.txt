@@ -1,0 +1,2 @@
+Gargoyle To Do:
+- swing animation not always playing
