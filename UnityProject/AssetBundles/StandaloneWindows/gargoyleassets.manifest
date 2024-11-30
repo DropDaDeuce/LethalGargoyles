@@ -1,15 +1,15 @@
 ManifestFileVersion: 0
-CRC: 439436755
+CRC: 1920357532
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: c1251de415833aa416557ac48768b85b
+    Hash: b3f40b18aef6fb63330b02a8a6847661
   TypeTreeHash:
     serializedVersion: 2
-    Hash: 78e54b59f2e75369687023c840a35310
+    Hash: 69bdefb5d6823ff7b6432d1ba21e7795
   IncrementalBuildHash:
     serializedVersion: 2
-    Hash: c1251de415833aa416557ac48768b85b
+    Hash: b3f40b18aef6fb63330b02a8a6847661
 HashAppended: 0
 ClassTypes:
 - Class: 1
@@ -29,6 +29,8 @@ ClassTypes:
 - Class: 48
   Script: {instanceID: 0}
 - Class: 54
+  Script: {instanceID: 0}
+- Class: 64
   Script: {instanceID: 0}
 - Class: 65
   Script: {instanceID: 0}
@@ -78,25 +80,36 @@ SerializeReferenceClassIdentifiers:
 - AssemblyName: Assembly-CSharp
   ClassName: NavSizeLimit
 Assets:
+- Assets/ModAssets/LethalGargoyle/Materials/GargoyleSkinOld.png
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_playerdeath_YouDied.wav
 - Assets/ModAssets/LethalGargoyle/Materials/MapDotRed.mat
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_HoardingBug1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_WorstEmployee.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_YerSneeze.wav
 - Assets/ModAssets/LethalGargoyle/Materials/Body.mat
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_YerSneeze.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_SackOfCompost.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_GhostGirl1.wav
 - Assets/ModAssets/LethalGargoyle/Bestiary/LethalGargoyleTK.asset
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_seen_NowYouSee.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_HoldShovel.wav
 - Assets/ModAssets/LethalGargoyle/Materials/Eyes_Angry.mat
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Butler1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_CouldnaeHitSpring.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Centipede1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_WaitingCenturies.wav
+- Assets/ModAssets/LethalGargoyle/Animations/walk.001.anim
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_death_FinalWords.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_GlazedEyes.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Slime1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_aggro_GotScrapForYa.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_Bracken.wav
 - Assets/ModAssets/LethalGargoyle/LethalGargoyleObj.prefab
 - Assets/ModAssets/LethalGargoyle/Bestiary/LethalGargoyleTN.asset
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_NoSkill.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Thumper1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_PinkBelliedNumpty.wav
 - Assets/ModAssets/LethalGargoyle/Models/LethalGargoyleModel.fbx
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Masked1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_CrackPot.wav
 - Assets/ModAssets/LethalGargoyle/Audio/SFX/sfx_walking.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_PokeYerEye.wav
@@ -105,25 +118,36 @@ Assets:
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_aggro_KickYerArse.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_ToySlingshot.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_DogMonkey.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_SlopBucket.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Maneater1.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Nutcracker1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_BarnDoor.wav
+- Assets/ModAssets/LethalGargoyle/Animations/attack.anim
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_AwfulBreath.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_StoneBlind.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_BodyOdour.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_SlopBucket.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_StoneBlind.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_SorriestExcuse.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_YouCannaeHitMe.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_CouldnaeHitCastle.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_YouCannaeHitMe.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_KissMyArse.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Jester1.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_PajamaWearing.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_playerdeath_EmployeeDown.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_hide_NowYouDont.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_MummyHelp.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_ExposedFace.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_TargetOnMeArse.wav
 - Assets/ModAssets/LethalGargoyle/Materials/Material.mat
-- Assets/ModAssets/LethalGargoyle/Materials/GargoyleSkinOld.png
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_SpringHead1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_ToughEnough.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_RubbishEmployee.wav
+- Assets/ModAssets/LethalGargoyle/Animations/idle.anim
 - Assets/ModAssets/LethalGargoyle/LethalGargoyleAnimator.controller
 - Assets/ModAssets/LethalGargoyle/Materials/GargoyleSkin.png
+- Assets/ModAssets/LethalGargoyle/Audio/SFX/sfx_running.wav
+- Assets/ModAssets/LethalGargoyle/Animations/die.anim
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Spider1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_BlunderinGoon.wav
+- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Bracken1.wav
 - Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_NoAim.wav
 Dependencies: []

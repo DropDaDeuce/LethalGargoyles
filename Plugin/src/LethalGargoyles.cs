@@ -7,6 +7,7 @@ using System.Reflection;
 using UnityEngine;
 using LethalGargoyles.Configuration;
 using System.Collections.Generic;
+using System.Net;
 
 namespace LethalGargoyles {
     [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
@@ -21,6 +22,11 @@ namespace LethalGargoyles {
         public static List<AudioClip> aggroClips = new List<AudioClip>();
         public static List<AudioClip> hideClips = new List<AudioClip>();
         public static List<AudioClip> seenClips = new List<AudioClip>();
+        public static List<AudioClip> enemyClips = new List<AudioClip>();
+        public static List<AudioClip> playerDeathClips = new List<AudioClip>();
+        public static List<AudioClip> deathClips = new List<AudioClip>();
+        public static List<AudioClip> priorDeathClips = new List<AudioClip>();
+        public static List<AudioClip> activityClips = new List<AudioClip>();
 
 #pragma warning disable IDE0051 // Remove unused private members
         private void Awake()
@@ -50,8 +56,9 @@ namespace LethalGargoyles {
             var LethalGargoyle = ModAssets.LoadAsset<EnemyType>("LethalGargoyle");
             var LethalGargoyleTN = ModAssets.LoadAsset<TerminalNode>("LethalGargoyleTN");
             var LethalGargoyleTK = ModAssets.LoadAsset<TerminalKeyword>("LethalGargoyleTK");
-            LoadClips();
 
+            Logger.LogInfo($"Loading audio clips");
+            LoadClips();
             // Optionally, we can list which levels we want to add our enemy to, while also specifying the spawn weight for each.
             /*
             var LethalGargoyleLevelRarities = new Dictionary<Levels.LevelTypes, int> {
@@ -128,6 +135,27 @@ namespace LethalGargoyles {
                     else if (clip.name.StartsWith("taunt_hide")) 
                     {
                         hideClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("taunt_enemy"))
+                    {
+                        tauntClips.Add(clip);
+                        enemyClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("taunt_playerdeath"))
+                    {
+                        playerDeathClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("taunt_death"))
+                    {
+                        deathClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("taunt_priordeath"))
+                    {
+                        priorDeathClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("taunt_activity"))
+                    {
+                        activityClips.Add(clip);
                     }
                 }
             }

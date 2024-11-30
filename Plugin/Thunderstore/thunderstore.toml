@@ -22,7 +22,7 @@ source = "../bin/Release/netstandard2.1/DropDaDeuce.LethalGargoyles.dll"
 target = "plugins/LethalGargoyles/"
 
 [[build.copy]]
-source = "../../UnityProject/AssetBundles/StandaloneWindows/modassets"
+source = "../../UnityProject/AssetBundles/StandaloneWindows/gargoyleassets"
 target = "plugins/LethalGargoyles/"
 
 [[build.copy]]

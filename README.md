@@ -1,6 +1,6 @@
 #Lethal Gargoyles!
 
-The Gargoyle model was extracted from the game Fable III and prepared for printing including smoothing by CharlieVet on cults3d.com
+The Gargoyle model was extracted from the game Fable II and prepared for printing including smoothing by CharlieVet on cults3d.com
 
 This model is available for use under https://creativecommons.org/licenses/by-nc/4.0/
 
