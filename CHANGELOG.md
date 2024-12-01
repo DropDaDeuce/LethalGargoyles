@@ -28,3 +28,4 @@
 ## 0.0.5
 
 - Some pathing and code optimizations.
+- Fixed a lot of pathing issues.

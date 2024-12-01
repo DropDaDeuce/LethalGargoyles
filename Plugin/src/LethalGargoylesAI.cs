@@ -44,7 +44,7 @@ namespace LethalGargoyles
         private float distanceToPlayer = 0f;
         private float distanceToClosestPlayer = 0f;
         private float idleDistance = 0f;
-        private Vector3 lastPoistion = Vector3.zero;
+        private Vector3 lastPosition = Vector3.zero;
         private Vector3 curPosition = Vector3.zero;
         private string? lastEnemy = null;
 
@@ -105,20 +105,22 @@ namespace LethalGargoyles
             base.Update();
             if (isEnemyDead) return;
 
-            distanceToPlayer = 0f;
-            distanceToClosestPlayer = 0f;
+            closestPlayer = GetClosestPlayer();
+            distanceToPlayer = targetPlayer != null ? Vector3.Distance(base.transform.position, targetPlayer.transform.position) : 0f;
+            LogIfDebugBuild("TargetPlayer: " + distanceToPlayer);
+            distanceToClosestPlayer = closestPlayer != null ? Vector3.Distance(base.transform.position, closestPlayer.transform.position) : 0f;
+            LogIfDebugBuild("ClosestPlayer: " + distanceToPlayer);
+            LogIfDebugBuild("Aware: " + awareDist);
 
             if (targetPlayer != null)
             {
-                distanceToPlayer = Vector3.Distance(base.transform.position, targetPlayer.transform.position);
+                if (!base.isOutside && !targetPlayer.isInsideFactory)
+                {
+                    SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
+                }
             }
 
-            closestPlayer = GetClosestPlayer(true, true, false);
-            if (closestPlayer != null)
-            {
-                distanceToClosestPlayer = Vector3.Distance(base.transform.position, closestPlayer.transform.position);
-            }
-
+            bool foundSpot = false;
             bool isSeen = false;
             if (distanceToClosestPlayer <= awareDist) {
                 isSeen = GargoyleIsSeen(base.transform);
@@ -178,17 +180,13 @@ namespace LethalGargoyles
                     break;
                 case (int)State.SearchingForPlayer:
                     agent.speed = baseSpeed * 1.5f;
-                    targetPlayer = null;
                     LogIfDebugBuild("Searching For Closest Player");
+                    SearchForPlayers();
                     if (FoundClosestPlayerInRange())
                     {
                         LogIfDebugBuild("Start Target Player");
                         StopSearch(currentSearch);
                         SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
-                    }
-                    else
-                    {
-                        SearchForPlayers();
                     }
                     break;
                 case (int)State.StealthyPursuit:
@@ -205,13 +203,10 @@ namespace LethalGargoyles
                             return;
                         }
                         creatureSFX.volume = 0.5f;
-                        if (!SetDestinationToHiddenPosition() && distanceToPlayer < idleDistance)
+                        foundSpot = SetDestinationToHiddenPosition();
+                        if (!foundSpot && distanceToPlayer < idleDistance)
                         {
                             SwitchToBehaviourClientRpc((int)State.AggressivePursuit);
-                        }
-                        else if (distanceToClosestPlayer < idleDistance)
-                        {
-                            SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                         }
                         else
                         {
@@ -220,6 +215,10 @@ namespace LethalGargoyles
                                 Taunt();
                             }
                         }
+                    }
+                    else
+                    {
+                        SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                     }
                     break;
                 case (int)State.AggressivePursuit:
@@ -240,7 +239,8 @@ namespace LethalGargoyles
                         bool canSeePlayer = CanSeePlayer(targetPlayer);
                         if (distanceToPlayer > aggroRange && distanceToClosestPlayer > aggroRange)
                         {
-                            if (SetDestinationToHiddenPosition())
+                            foundSpot = SetDestinationToHiddenPosition();
+                            if (foundSpot)
                             {
                                 SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
                             }
@@ -295,11 +295,21 @@ namespace LethalGargoyles
                             }
                         }
 
-                        if (!SetDestinationToHiddenPosition() && isSeen)
+                        if (Time.time - lastGenTauntTime >= randGenTauntTime && IsHost)
+                        {
+                            Taunt();
+                        }
+
+                        foundSpot = SetDestinationToHiddenPosition();
+                        if (!foundSpot && isSeen)
                         {
                             SwitchToBehaviourClientRpc((int)State.AggressivePursuit);
-                        }
-                        else
+                        } 
+                        else if (!foundSpot && closestPlayer != null)
+                        {
+                            SetDestinationToPosition(targetPlayer.transform.position);
+                        } 
+                        else if (!isSeen)
                         {
                             SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
                         }
@@ -310,13 +320,30 @@ namespace LethalGargoyles
                     LogIfDebugBuild("This Behavior State doesn't exist!");
                     break;
             }
+        }
 
-            //Run again for animations
+        public override void DoAIInterval()
+        {
+            base.DoAIInterval();
+
+            lastPosition = curPosition;
+            curPosition = transform.position;
+
+            if (isEnemyDead || StartOfRound.Instance.allPlayersDead)
+            {
+                return;
+            }
+
+            if ((currentBehaviourStateIndex == (int)State.StealthyPursuit || currentBehaviourStateIndex == (int)State.Idle) && IsHost) {
+                EnemyTaunt();
+            }
+
             switch (currentBehaviourStateIndex)
             {
                 case (int)State.StealthyPursuit:
-                    if (curPosition == lastPoistion)
+                    if (curPosition == lastPosition)
                     {
+                        SwitchToBehaviourClientRpc((int)State.Idle);
                         DoAnimationClientRpc("startIdle");
                     }
                     else
@@ -328,7 +355,7 @@ namespace LethalGargoyles
                     DoAnimationClientRpc("startIdle");
                     break;
                 case (int)State.SearchingForPlayer:
-                    if (curPosition == lastPoistion)
+                    if (curPosition == lastPosition)
                     {
                         DoAnimationClientRpc("startIdle");
                     }
@@ -338,7 +365,7 @@ namespace LethalGargoyles
                     }
                     break;
                 case (int)State.AggressivePursuit:
-                    if (curPosition == lastPoistion)
+                    if (curPosition == lastPosition)
                     {
                         DoAnimationClientRpc("startIdle");
                     }
@@ -348,7 +375,7 @@ namespace LethalGargoyles
                     }
                     break;
                 case (int)State.GetOutOfSight:
-                    if (curPosition == lastPoistion)
+                    if (curPosition == lastPosition)
                     {
                         DoAnimationClientRpc("startIdle");
                     }
@@ -360,34 +387,6 @@ namespace LethalGargoyles
                 default:
                     LogIfDebugBuild("This Behavior State doesn't exist!");
                     break;
-            }
-        }
-
-        public override void DoAIInterval()
-        {
-            base.DoAIInterval();
-
-            lastPoistion = curPosition;
-            curPosition = transform.position;
-
-            if (isEnemyDead || StartOfRound.Instance.allPlayersDead)
-            {
-                return;
-            }
-
-            if (targetPlayer == null)
-            {
-                LogIfDebugBuild("Target Player Is Null");
-                distanceToPlayer = 0f;
-                SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
-            }
-            else
-            {
-                distanceToPlayer = Vector3.Distance(base.transform.position, targetPlayer.transform.position);
-            }
-
-            if ((currentBehaviourStateIndex == (int)State.StealthyPursuit || currentBehaviourStateIndex == (int)State.Idle) && IsHost) {
-                EnemyTaunt();
             }
         }
 
@@ -469,13 +468,12 @@ namespace LethalGargoyles
         {
             Transform? bestCoverPoint = null;
             List<Transform> coverPoints = [];
-            List<Transform> buCoverPoints = [];
 
-            FindCoverPointsAroundTarget(ref coverPoints, ref buCoverPoints);
+            FindCoverPointsAroundTarget(ref coverPoints);
 
             if (coverPoints.Count > 0)
             {
-                bestCoverPoint = ChooseBestCoverPoint(coverPoints, buCoverPoints);
+                bestCoverPoint = ChooseBestCoverPoint(coverPoints);
             }
 
             if (bestCoverPoint != null)
@@ -491,22 +489,25 @@ namespace LethalGargoyles
             }
         }
 
-        public void FindCoverPointsAroundTarget(ref List<Transform> coverPoints, ref List<Transform> buCoverPoints)
+        public void FindCoverPointsAroundTarget(ref List<Transform> coverPoints)
         {
+            Bounds playerBounds = new(targetPlayer.transform.position, new Vector3(40, 20, 40));
+            Bounds gargoyleBounds = new(transform.position, new Vector3(40, 20, 40));
 
             for (int i = 0; i < allAINodes.Length; i++)
             {
-                float distance = Vector3.Distance(allAINodes[i].transform.position, targetPlayer.transform.position);
-                float buDistance = Vector3.Distance(allAINodes[i].transform.position, transform.position);
-                if (distance < 40)
+                if (gargoyleBounds.Contains(allAINodes[i].transform.position) || playerBounds.Contains(allAINodes[i].transform.position))
                 {
                     bool isSafe = true;
                     foreach (PlayerControllerB player in StartOfRound.Instance.allPlayerScripts)
                     {
-                        if (player.HasLineOfSightToPosition(allAINodes[i].transform.position, 60f, 60, 25f) || PathIsIntersectedByLineOfSight(allAINodes[i].transform.position, false, true))
+                        if (playerBounds.Contains(player.transform.position) || gargoyleBounds.Contains(player.transform.position))
                         {
-                            isSafe = false;
-                            break;
+                            if (player.HasLineOfSightToPosition(allAINodes[i].transform.position, 60f, 60, 25f) || PathIsIntersectedByLineOfSight(allAINodes[i].transform.position, false, true))
+                            {
+                                isSafe = false;
+                                break;
+                            }
                         }
                     }
 
@@ -514,48 +515,23 @@ namespace LethalGargoyles
                     {
                         coverPoints.Add(allAINodes[i].transform);
                     }
-                } else if (buDistance < 40)
-                {
-                    bool isSafe = true;
-                    foreach (PlayerControllerB player in StartOfRound.Instance.allPlayerScripts)
-                    {
-                        if (player.HasLineOfSightToPosition(allAINodes[i].transform.position, 60f, 60, 25f) || PathIsIntersectedByLineOfSight(allAINodes[i].transform.position, false, true))
-                        {
-                            isSafe = false;
-                            break;
-                        }
-                    }
-
-                    if (isSafe)
-                    {
-                        buCoverPoints.Add(allAINodes[i].transform);
-                    }
                 }
             }
-
             return;
         }
 
-        public Transform? ChooseBestCoverPoint(List<Transform> coverPoints, List<Transform> buCoverPoints)
+        public Transform? ChooseBestCoverPoint(List<Transform> coverPoints)
         {
-            if (coverPoints.Count == 0 && buCoverPoints.Count == 0)
+            if (coverPoints.Count == 0)
             {
                 return null;
-
             }
 
-            Transform bestCoverPoint;
+            Transform bestCoverPoint = coverPoints[0];
+            Transform bestCoverPoint2 = coverPoints[0];
 
-            if (coverPoints.Count != 0) {
-
-                bestCoverPoint = coverPoints[0];
-            }
-            else
-            {
-                bestCoverPoint = buCoverPoints[0];
-            }
-
-                float bestDistance = Vector3.Distance(targetPlayer.transform.position, bestCoverPoint.position);
+            float bestDistance = 40f;
+            float bestDistance2 = 40f;
 
             foreach (Transform coverPoint in coverPoints)
             {
@@ -564,33 +540,16 @@ namespace LethalGargoyles
                 {
                     bestCoverPoint = coverPoint;
                     bestDistance = distance;
+                }else if (distance < bestDistance2 && distance >= aggroRange + 1f)
+                {
+                    bestCoverPoint2 = coverPoint;
+                    bestDistance2 = distance;
                 }
             }
 
-            if (bestCoverPoint = coverPoints[0])
+            if (bestCoverPoint == coverPoints[0])
             {
-                foreach (Transform coverPoint in coverPoints)
-                {
-                    float distance = Vector3.Distance(targetPlayer.transform.position, coverPoint.position);
-                    if (distance < bestDistance && distance >= aggroRange + 1f)
-                    {
-                        bestCoverPoint = coverPoint;
-                        bestDistance = distance;
-                    }
-                }
-            }
-
-            if (bestCoverPoint = coverPoints[0])
-            {
-                foreach (Transform buCoverPoint in buCoverPoints)
-                {
-                    float distance = Vector3.Distance(targetPlayer.transform.position, buCoverPoint.position);
-                    if (distance < bestDistance && distance >= aggroRange + 1f)
-                    {
-                        bestCoverPoint = buCoverPoint;
-                        bestDistance = distance;
-                    }
-                }
+                bestCoverPoint = bestCoverPoint2;
             }
 
             return bestCoverPoint;
@@ -600,7 +559,6 @@ namespace LethalGargoyles
         {
             bool isSeen = false;
             bool partSeen = false;
-            float distance = 0f;
 
             Vector3[] gargoylePoints = [
                 t.position + Vector3.up * 0.25f, // bottom
@@ -613,7 +571,7 @@ namespace LethalGargoyles
             for (int i = 0; i < StartOfRound.Instance.allPlayerScripts.Length; i++)
             {
                 PlayerControllerB player = StartOfRound.Instance.allPlayerScripts[i];
-                distance = Vector3.Distance(player.transform.position, t.position);
+                float distance = Vector3.Distance(player.transform.position, t.position);
 
                 if (distance <= awareDist)
                 {
@@ -635,6 +593,7 @@ namespace LethalGargoyles
                     }
                 }
             }
+            LogIfDebugBuild("GargoyleSeen: " + isSeen);
             return isSeen;
         }
 

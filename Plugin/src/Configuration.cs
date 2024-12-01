@@ -68,7 +68,7 @@ namespace LethalGargoyles.Configuration {
                                    "How much buffer the Gargoyle will try to keep between him and the target player.");
             awareDist = cfg.Bind("General",
                                  "Awareness",
-                                 45,
+                                 60,
                                  "How far away is the gargoyle aware of other players. This will affect performance, as this setting is used to calculate pathing.");
 
 
