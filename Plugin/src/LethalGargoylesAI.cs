@@ -33,23 +33,12 @@ namespace LethalGargoyles
 
         private float randGenTauntTime = 0f;
         private float randAgrTauntTime = 0f;
-        //private float randSeenTauntTime = 0f;
-        //private float randHideTauntTime = 0f;
-        //private float randEnemyTauntTime = 0f;
         
         private float lastGenTauntTime = 0f;
         private float lastAgrTauntTime = 0f;
-        //private float lastSeenTauntTime = 0f;
-        //private float lastHideTauntTime = 0f;
-        //private float lastEnemyTauntTime = 0f;
 
         private int lastGenTaunt = -1;
         private int lastAgrTaunt = -1;
-        //private int lastSeenTaunt = -1;
-        //private int lastHideTaunt = -1;
-        //private int lastEnemyTaunt = -1;
-
-        //private bool wasSeen;    
 
         private float timeSinceHittingPlayer;
         private float distanceToPlayer = 0f;
@@ -69,8 +58,7 @@ namespace LethalGargoyles
         private int maxTaunt = 0;
         private float distWarn = 0f;
         private float bufferDist = 0f;
-
-        //private AudioSource creatureSFXRun;
+        private float awareDist = 0f;
 
         enum State
         {
@@ -93,9 +81,9 @@ namespace LethalGargoyles
             LogIfDebugBuild("Gargoyle Spawned");
             DoAnimationClientRpc("startWalk");
 
-            StartSearch(base.transform.position);
             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
-            
+            StartSearch(base.transform.position);
+
             baseSpeed = Plugin.BoundConfig.baseSpeed.Value;
             attackRange = Plugin.BoundConfig.attackRange.Value;
             attackDamage = Plugin.BoundConfig.attackDamage.Value;
@@ -105,6 +93,7 @@ namespace LethalGargoyles
             maxTaunt = Plugin.BoundConfig.maxTaunt.Value;
             distWarn = Plugin.BoundConfig.distWarn.Value;
             bufferDist = Plugin.BoundConfig.bufferDist.Value;
+            awareDist = Plugin.BoundConfig.awareDist.Value;
 
             //creatureSFXRun = transform.Find("LethalGargoyleModel").Find("CreatureSFXRun").GetComponent<AudioSource>();
 
@@ -116,49 +105,8 @@ namespace LethalGargoyles
             base.Update();
             if (isEnemyDead) return;
 
-            bool isSeen = GargoyleIsSeen(base.transform);
-            if (isSeen && currentBehaviourStateIndex != (int)State.AggressivePursuit)
-            {
-
-                if (targetPlayer != null)
-                {
-
-                    if (Vector3.Distance(targetPlayer.transform.position, base.transform.position) <= aggroRange)
-                    {
-                        LogIfDebugBuild("Is Seen. Switching to aggression");
-                        SwitchToBehaviourClientRpc((int)State.AggressivePursuit);
-                    }
-                    else
-                    {
-                        LogIfDebugBuild("Is Seen and Not Aggressive");
-                        SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
-                    }
-                }
-                else
-                {
-                    LogIfDebugBuild("Is Seen and Not Aggressive");
-                    SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
-                }
-            }
-            else if (!isSeen && distanceToPlayer <= idleDistance && currentBehaviourStateIndex != (int)State.AggressivePursuit && currentBehaviourStateIndex != (int)State.SearchingForPlayer)
-            {
-                LogIfDebugBuild("Not Seen. Switching to idle.");
-                SwitchToBehaviourClientRpc((int)State.Idle);
-            }
-
-            /*if (!isSeen)
-            {
-                if (wasSeen && !creatureVoice.isPlaying)
-                {
-                    wasSeen = false;
-                    OtherTaunt(Plugin.hideClips, "Hide", ref lastHideTaunt, ref lastHideTauntTime, ref randHideTauntTime);
-                } 
-                else if (Time.time - lastSeenTauntTime >= randSeenTauntTime * 2 && !wasSeen && !creatureVoice.isPlaying)
-                {
-                    wasSeen = true;
-                    OtherTaunt(Plugin.seenClips, "Seen", ref lastSeenTaunt, ref lastSeenTauntTime, ref randSeenTauntTime);
-                }
-            }*/
+            distanceToPlayer = 0f;
+            distanceToClosestPlayer = 0f;
 
             if (targetPlayer != null)
             {
@@ -170,7 +118,37 @@ namespace LethalGargoyles
             {
                 distanceToClosestPlayer = Vector3.Distance(base.transform.position, closestPlayer.transform.position);
             }
-            timeSinceHittingPlayer += Time.deltaTime;
+
+            bool isSeen = false;
+            if (distanceToClosestPlayer <= awareDist) {
+                isSeen = GargoyleIsSeen(base.transform);
+                if (isSeen && currentBehaviourStateIndex != (int)State.AggressivePursuit)
+                {
+                    if (targetPlayer != null)
+                    {
+                        if (distanceToPlayer <= aggroRange)
+                        {
+                            LogIfDebugBuild("Is Seen. Switching to aggression");
+                            SwitchToBehaviourClientRpc((int)State.AggressivePursuit);
+                        }
+                        else
+                        {
+                            LogIfDebugBuild("Is Seen and Not Aggressive");
+                            SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
+                        }
+                    }
+                    else
+                    {
+                        LogIfDebugBuild("Is Seen and Not Aggressive");
+                        SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
+                    }
+                }
+            }
+            else if (!isSeen && distanceToPlayer <= idleDistance && currentBehaviourStateIndex != (int)State.AggressivePursuit && currentBehaviourStateIndex != (int)State.SearchingForPlayer)
+            {
+                LogIfDebugBuild("Not Seen. Switching to idle.");
+                SwitchToBehaviourClientRpc((int)State.Idle);
+            }
 
             switch (currentBehaviourStateIndex)
             {
@@ -200,6 +178,7 @@ namespace LethalGargoyles
                     break;
                 case (int)State.SearchingForPlayer:
                     agent.speed = baseSpeed * 1.5f;
+                    targetPlayer = null;
                     LogIfDebugBuild("Searching For Closest Player");
                     if (FoundClosestPlayerInRange())
                     {
@@ -212,7 +191,6 @@ namespace LethalGargoyles
                         SearchForPlayers();
                     }
                     break;
-
                 case (int)State.StealthyPursuit:
                     agent.speed = baseSpeed;
                     LogIfDebugBuild("Stealthily follow player.");
@@ -226,7 +204,6 @@ namespace LethalGargoyles
                             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                             return;
                         }
-
                         creatureSFX.volume = 0.5f;
                         if (!SetDestinationToHiddenPosition() && distanceToPlayer < idleDistance)
                         {
@@ -245,7 +222,6 @@ namespace LethalGargoyles
                         }
                     }
                     break;
-
                 case (int)State.AggressivePursuit:
                     agent.speed = baseSpeed * 2.5f;
                     LogIfDebugBuild("Cannot hide, turn to aggression.");
@@ -277,6 +253,7 @@ namespace LethalGargoyles
                                 OtherTaunt("aggro", ref lastAgrTaunt, ref lastAgrTauntTime, ref randAgrTauntTime);
                             }
                             SetDestinationToPosition(targetPlayer.transform.position);
+                            timeSinceHittingPlayer += Time.deltaTime;
                             if (timeSinceHittingPlayer >= 1f && canSeePlayer)
                             {
                                 if (distanceToPlayer < attackRange)
@@ -297,7 +274,6 @@ namespace LethalGargoyles
                             }
                         }
                     }
-
                     break;
 
                 case (int)State.GetOutOfSight:
@@ -624,6 +600,7 @@ namespace LethalGargoyles
         {
             bool isSeen = false;
             bool partSeen = false;
+            float distance = 0f;
 
             Vector3[] gargoylePoints = [
                 t.position + Vector3.up * 0.25f, // bottom
@@ -636,21 +613,25 @@ namespace LethalGargoyles
             for (int i = 0; i < StartOfRound.Instance.allPlayerScripts.Length; i++)
             {
                 PlayerControllerB player = StartOfRound.Instance.allPlayerScripts[i];
-                if ((!base.isOutside && player.isInsideFactory) || (base.isOutside))
+                distance = Vector3.Distance(player.transform.position, t.position);
+
+                if (distance <= awareDist)
                 {
-
-                    foreach (Vector3 point in gargoylePoints)
+                    if ((!base.isOutside && player.isInsideFactory) || (base.isOutside))
                     {
-                        if (player.HasLineOfSightToPosition(point, 68f))
+                        foreach (Vector3 point in gargoylePoints)
                         {
-                            partSeen = true;
-                            break;
+                            if (player.HasLineOfSightToPosition(point, 68f))
+                            {
+                                partSeen = true;
+                                break;
+                            }
                         }
-                    }
 
-                    if ((PlayerIsTargetable(StartOfRound.Instance.allPlayerScripts[i]) && partSeen) && PlayerHasHorizontalLOS(StartOfRound.Instance.allPlayerScripts[i]))
-                    {
-                        isSeen = true;
+                        if ((PlayerIsTargetable(StartOfRound.Instance.allPlayerScripts[i]) && partSeen) && PlayerHasHorizontalLOS(StartOfRound.Instance.allPlayerScripts[i]))
+                        {
+                            isSeen = true;
+                        }
                     }
                 }
             }
@@ -684,6 +665,7 @@ namespace LethalGargoyles
             if (playerControllerB != null)
             {
                 LogIfDebugBuild("Gargoyle Collision with Player!");
+                timeSinceHittingPlayer += Time.deltaTime;
                 if (timeSinceHittingPlayer >= 1f)
                 {
                     AttackPlayer(playerControllerB);

@@ -24,3 +24,7 @@
 ## 0.0.4
 
 - Fixed Read Me name spellings
+
+## 0.0.5
+
+- Some pathing and code optimizations.

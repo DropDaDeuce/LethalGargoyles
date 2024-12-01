@@ -17,6 +17,7 @@ namespace LethalGargoyles.Configuration {
         public ConfigEntry<int> maxTaunt;
         public ConfigEntry<int> distWarn;
         public ConfigEntry<int> bufferDist;
+        public ConfigEntry<int> awareDist;
 
         public PluginConfig(ConfigFile cfg)
         {
@@ -65,6 +66,11 @@ namespace LethalGargoyles.Configuration {
                                    "Buffer Distance",
                                    12,
                                    "How much buffer the Gargoyle will try to keep between him and the target player.");
+            awareDist = cfg.Bind("General",
+                                 "Awareness",
+                                 45,
+                                 "How far away is the gargoyle aware of other players. This will affect performance, as this setting is used to calculate pathing.");
+
 
             ClearUnusedEntries(cfg);
         }

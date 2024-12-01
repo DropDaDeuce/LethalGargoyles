@@ -13,8 +13,8 @@ BepInEx-BepInExPack = "5.4.2100"
 Evaisa-LethalLib = "0.16.1"
 
 [build]
-icon = "./icon.png"
-readme = "./README.md"
+icon = "../../icon.png"
+readme = "../../README.md"
 outdir = "./Packages"
 
 [[build.copy]]
@@ -26,7 +26,7 @@ source = "../../UnityProject/AssetBundles/StandaloneWindows/gargoyleassets"
 target = "plugins/LethalGargoyles/"
 
 [[build.copy]]
-source = "./CHANGELOG.md"
+source = "../../CHANGELOG.md"
 target = "/"
 
 [publish]
