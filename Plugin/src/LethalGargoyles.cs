@@ -5,45 +5,43 @@ using LethalLib.Modules;
 using System.IO;
 using System.Reflection;
 using UnityEngine;
-using LethalGargoyles.Configuration;
+using LethalGargoyles.src.Config;
 using System.Collections.Generic;
-using System.Net;
+using LethalLib;
 
-namespace LethalGargoyles {
+namespace LethalGargoyles.src
+{
     [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
     [BepInDependency(LethalLib.Plugin.ModGUID)]
-    public class Plugin : BaseUnityPlugin {
+    [BepInDependency("com.elitemastereric.coroner", BepInDependency.DependencyFlags.SoftDependency)]
+
+    public class Plugin : BaseUnityPlugin
+    {
         internal static new ManualLogSource Logger = null!;
         public static Plugin Instance { get; private set; } = null!;
-        internal static Harmony? Harmony { get; set; }
+        internal static readonly Harmony harmony = new(MyPluginInfo.PLUGIN_GUID);
         internal static PluginConfig BoundConfig { get; private set; } = null!;
+
+        public bool IsCoronerLoaded { get; private set; }
+
         public static AssetBundle? ModAssets;
-        public static List<AudioClip> tauntClips = new List<AudioClip>();
-        public static List<AudioClip> aggroClips = new List<AudioClip>();
-        public static List<AudioClip> hideClips = new List<AudioClip>();
-        public static List<AudioClip> seenClips = new List<AudioClip>();
-        public static List<AudioClip> enemyClips = new List<AudioClip>();
-        public static List<AudioClip> playerDeathClips = new List<AudioClip>();
-        public static List<AudioClip> deathClips = new List<AudioClip>();
-        public static List<AudioClip> priorDeathClips = new List<AudioClip>();
-        public static List<AudioClip> activityClips = new List<AudioClip>();
+        public static List<AudioClip> tauntClips = [];
+        public static List<AudioClip> aggroClips = [];
+        public static List<AudioClip> hideClips = [];
+        public static List<AudioClip> seenClips = [];
+        public static List<AudioClip> enemyClips = [];
+        public static List<AudioClip> playerDeathClips = [];
+        public static List<AudioClip> deathClips = [];
+        public static List<AudioClip> priorDeathClips = [];
+        public static List<AudioClip> activityClips = [];
 
 #pragma warning disable IDE0051 // Remove unused private members
         private void Awake()
 #pragma warning restore IDE0051 // Remove unused private members
         {
             Logger = base.Logger;
-
-            // If you don't want your mod to use a configuration file, you can remove this line, Configuration.cs, and other references.
             BoundConfig = new PluginConfig(base.Config);
-
-            // This should be ran before Network Prefabs are registered.
             InitializeNetworkBehaviours();
-
-            // We load the asset bundle that should be next to our DLL file, with the specified name.
-            // You may want to rename your asset bundle from the AssetBundle Browser in order to avoid an issue with
-            // asset bundle identifiers being the same between multiple bundles, allowing the loading of only one bundle from one mod.
-            // In that case also remember to change the asset bundle copying code in the csproj.user file.
             var bundleName = "gargoyleassets";
             ModAssets = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Info.Location), bundleName));
             if (ModAssets == null)
@@ -51,44 +49,24 @@ namespace LethalGargoyles {
                 Logger.LogError($"Failed to load custom assets.");
                 return;
             }
-
-            // We load our assets from our asset bundle. Remember to rename them both here and in our Unity project.
             var LethalGargoyle = ModAssets.LoadAsset<EnemyType>("LethalGargoyle");
             var LethalGargoyleTN = ModAssets.LoadAsset<TerminalNode>("LethalGargoyleTN");
             var LethalGargoyleTK = ModAssets.LoadAsset<TerminalKeyword>("LethalGargoyleTK");
 
             Logger.LogInfo($"Loading audio clips");
             LoadClips();
-            // Optionally, we can list which levels we want to add our enemy to, while also specifying the spawn weight for each.
-            /*
-            var LethalGargoyleLevelRarities = new Dictionary<Levels.LevelTypes, int> {
-                {Levels.LevelTypes.ExperimentationLevel, 10},
-                {Levels.LevelTypes.AssuranceLevel, 40},
-                {Levels.LevelTypes.VowLevel, 20},
-                {Levels.LevelTypes.OffenseLevel, 30},
-                {Levels.LevelTypes.MarchLevel, 20},
-                {Levels.LevelTypes.RendLevel, 50},
-                {Levels.LevelTypes.DineLevel, 25},
-                // {Levels.LevelTypes.TitanLevel, 33},
-                // {Levels.LevelTypes.All, 30},     // Affects unset values, with lowest priority (gets overridden by Levels.LevelTypes.Modded)
-                {Levels.LevelTypes.Modded, 60},     // Affects values for modded moons that weren't specified
-            };
-            // We can also specify custom level rarities
-            var LethalGargoyleCustomLevelRarities = new Dictionary<string, int> {
-                {"EGyptLevel", 50},
-                {"46 Infernis", 69},    // Either LLL or LE(C) name can be used, LethalLib will handle both
-            };
-            */
-
-            // Network Prefabs need to be registered. See https://docs-multiplayer.unity3d.com/netcode/current/basics/object-spawning/
-            // LethalLib registers prefabs on GameNetworkManager.Start.
             NetworkPrefabs.RegisterNetworkPrefab(LethalGargoyle.enemyPrefab);
-
-            // For different ways of registering your enemy, see https://github.com/EvaisaDev/LethalLib/blob/main/LethalLib/Modules/Enemies.cs
             Enemies.RegisterEnemy(LethalGargoyle, BoundConfig.SpawnWeight.Value, Levels.LevelTypes.All, LethalGargoyleTN, LethalGargoyleTK);
-            // For using our rarity tables, we can use the following:
-            // Enemies.RegisterEnemy(LethalGargoyle, LethalGargoyleLevelRarities, LethalGargoyleCustomLevelRarities, LethalGargoyleTN, LethalGargoyleTK);
+            harmony.PatchAll();
             Instance = this;
+
+            IsCoronerLoaded = DepIsLoaded("com.elitemastereric.coroner");
+            Plugin.Logger.LogInfo($"Coroner Is Loaded? " + IsCoronerLoaded);
+
+            if (IsCoronerLoaded)
+            {
+                SoftDepends.CoronerClass.Init();
+            }
 
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
         }
@@ -113,14 +91,13 @@ namespace LethalGargoyles {
 
         void LoadClips()
         {
-            // Assuming ModAssets is the loaded AssetBundle
             if (ModAssets != null)
             {
                 AudioClip[] allClips = ModAssets.LoadAllAssets<AudioClip>();
-                
+
                 foreach (AudioClip clip in allClips)
                 {
-                    if (clip.name.StartsWith("taunt_general")) // Adjust the filter as needed
+                    if (clip.name.StartsWith("taunt_general"))
                     {
                         tauntClips.Add(clip);
                     }
@@ -128,11 +105,11 @@ namespace LethalGargoyles {
                     {
                         aggroClips.Add(clip);
                     }
-                    else if (clip.name.StartsWith("taunt_seen")) 
+                    else if (clip.name.StartsWith("taunt_seen"))
                     {
                         seenClips.Add(clip);
                     }
-                    else if (clip.name.StartsWith("taunt_hide")) 
+                    else if (clip.name.StartsWith("taunt_hide"))
                     {
                         hideClips.Add(clip);
                     }
@@ -157,6 +134,18 @@ namespace LethalGargoyles {
                         activityClips.Add(clip);
                     }
                 }
+            }
+        }
+
+        private bool DepIsLoaded(string pGUID)
+        {
+            try
+            {
+                return BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey(pGUID);
+            }
+            catch
+            {
+                return false;
             }
         }
     }

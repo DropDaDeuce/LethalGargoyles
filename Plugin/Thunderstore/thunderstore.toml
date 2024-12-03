@@ -29,6 +29,10 @@ target = "plugins/LethalGargoyles/"
 source = "../../CHANGELOG.md"
 target = "/"
 
+[[build.copy]]
+source = "./BepInEx/config/EliteMasterEric-Coroner/Strings_en-us_gargoyle.xml"
+target = "/BepInEx/config/EliteMasterEric-Coroner/"
+
 [publish]
 communities = [ "lethal-company", ]
 [publish.categories]

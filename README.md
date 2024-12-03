@@ -43,12 +43,15 @@ I did all the voice lines myself and I'm willing to take voice line requests for
 <pre>"You're so incompetent, you couldnae hit a spring head!"</pre>
 <pre>"I've seen more enthusiasm from a Bracken!"</pre>
 <pre>"What do you think of that, Mr. Pajama-Wearing, Basket-Face, Slipper-Wielding, Clipe-Dreep-Bauchle, Gether-Uping-Blate-Maw, Bleathering, Gomeril, Jessie, Oaf-Looking, Stauner, Nyaff, Plookie, Shan, Milk-Drinking, Soy-Faced Shilpit, Mim-Moothed, Sniveling, Worm-Eyed, Hotten-Blaugh, Vile-Stoochie, Callie-Breek-Tattie?" - Submitted by ThePatienceToad</pre>
+<pre>"Its employees like you that make me happy humans are mortal!" - Submitted by ThePatienceToad</pre>
+<pre>"If you look like that, I'm scared to see what your parents look like." - Submitted by ThePatienceToad</pre>
 </details>
 
 <details>
 <summary>Aggro (When you aggro him)</summary>
 <pre>"That's It! I'll kick yer arse!"</pre>
 <pre>"You think you're tough!? I got some scrap for ya!"</pre>
+<pre>"I'll bloody make yer face even more ugly! Wait… I dinnae think that's possible."</pre> - Electric
 </details>
 
 <details>
@@ -75,12 +78,13 @@ I did all the voice lines myself and I'm willing to take voice line requests for
 
 ## To Do
  - Add "Prior Death" taunts. This will be a chance to taunt you for how you died in the prior round. - Idea submitted by Sniker
-    - Died to fall damage
-    - Died to a specific enemy
+    - Taunt for each cause of death.
+    - optional Coroner Integration for specific causes.
  - Add "Action" taunts. They will trigger based on some of your actions. - Idea submitted by Sniker
     - Pick up an annoying item.
     - Near a ledge
     - Kill another enemy
+    - Getting lost
  - Find more ways for him to be mischievous. (Keeping the theme of him trying to stay hidden)
 
 ### Credits:

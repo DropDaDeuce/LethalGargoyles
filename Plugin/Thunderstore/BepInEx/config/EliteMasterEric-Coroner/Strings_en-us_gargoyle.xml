@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<base xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema" type="string">
+    <tags>
+        <tag language="en" />
+    </tags>
+    <strings>
+        <!--
+            Translation Notes:
+            This is the default localization file for Coroner.
+            
+            By default, any of the `FunnyNote` or `Death` strings are dynamically chosen at random.
+            If the `SeriousDeathMessages` option is enabled, the first `Death` message found in the file is used,
+                so make this one literal and specific.
+            The other ones can be puns or jokes, and options can be added or removed as needed, just make sure
+                to keep the correct tags, and make sure that there is at least one message for each `Death` type.
+        -->
+
+        <!-- TN: Killed by a Gargoyle -->
+		<DeathEnemyLGargoyle text="Was killed by a Gargoyle." />
+        <DeathEnemyLGargoyle text="Was too slow and got stoned." />
+        <DeathEnemyLGargoyle text="Talked to death by a Gargoyle." />
+        <DeathEnemyLGargoyle text="Must have been afk to die to a Gargoyle." />
+        <DeathEnemyLGargoyle text="Got spanked by a Gargoyle." />
+    </strings>
+</base>
