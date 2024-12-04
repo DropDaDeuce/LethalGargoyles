@@ -12,7 +12,8 @@ His taunts vary and currently have several catagories: General, Aggro, Gargoyle 
 </pre>
 </details>
 
-Any feedback can be posted to my Github repo (link at the top of the page), or my forum in the [Lethal Company Modding Discord community](https://discord.com/channels/1168655651455639582/1312527029455032394)
+Any feedback can be posted to my Github repo (link at the top of the page), or my forum in the [Lethal Company Modding Discord community](https://discord.com/channels/1168655651455639582/1312527029455032394). 
+
 This is my first experience with Unity, C#, models, and animations. If you see any way I can improve the code, model, or the mod in general please let me know!
 
 I'm willing to take voice line requests for this mod. I can't guarantee that each request will be approved.

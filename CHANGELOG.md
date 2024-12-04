@@ -39,7 +39,7 @@
     -  Adding 78 more taunts relating to cause of death. (18 from vanilla, 60 from Coroner.)
     - Gargoyle will now taunt it's target with how they died the last round.
 - Added 3 aggro and 2 general taunts.
-- 1 Gargoyle Attack Voice Line and 1 Gargoyle Hit Voice Line
+- 2 Gargoyle Attack Voice Lines and 2 Gargoyle Hit Voice Lines
 - A few tweaks to the settings.
 - Accidently set Gargoyles health to 0 at some point. Set back to 6 as intended.
 - Adjusted Gargoyles aggro state to be harder to counter play.
