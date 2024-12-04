@@ -74,7 +74,7 @@ I'm willing to take voice line requests for this mod. I can't guarantee that eac
 </details>
 
 <details>
-<summary>Player Death (When his target dies)</summary>
+<summary>Player Death (When a player dies to a Gargoyle)</summary>
 <pre>"Hahahaha! You died!"</pre>
 <pre>"Another employee down! Hahahaha!"</pre>
 <pre>"Hahahaha! You suck!"</pre>

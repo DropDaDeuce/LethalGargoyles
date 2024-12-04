@@ -10,10 +10,10 @@ namespace LethalGargoyles.src.Patch
     {
         public static List<(string playerName, string causeOfDeath, string source)> previousRoundDeaths = [];
 
-        [HarmonyPatch("ShipLeave")]
+        [HarmonyPatch("WritePlayerNotes")]
         [HarmonyPostfix]
 #pragma warning disable IDE0051 // Remove unused private members
-        static void PostFixShipLeave()
+        static void PostFixWritePlayerNotes()
 #pragma warning restore IDE0051 // Remove unused private members
         {
             Plugin.Logger.LogInfo("Getting Causes of Death.");

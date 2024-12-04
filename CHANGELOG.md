@@ -41,5 +41,10 @@
 - Added 3 aggro and 2 general taunts.
 - 1 Gargoyle Attack Voice Line and 1 Gargoyle Hit Voice Line
 - A few tweaks to the settings.
+- Accidently set Gargoyles health to 0 at some point. Set back to 6 as intended.
+- Adjusted Gargoyles aggro state to be harder to counter play.
+- Fixed Gargoyles attacks being more than 1 per second.
+- Reduced max distance of Gargoyle voice to 3* normal instead of 4*
+- Fixed enemy clips being pulled into general taunts.
 - Default Idle config reduced from 30 to 20. That way Gargoyles should follow their target a bit more closely.
     - You will need to update your config yourself if you installed this before this update and you want to see this change.
