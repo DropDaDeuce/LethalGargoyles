@@ -98,6 +98,12 @@ namespace LethalGargoyles.src.Enemy
             base.Update();
             if (isEnemyDead) return;
 
+            if (targetPlayer.isPlayerDead)
+            {
+                PlayVoice(Plugin.playerDeathClips, "playerdeath");
+                SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
+            }
+
             closestPlayer = GetClosestPlayer();
             distanceToPlayer = targetPlayer != null ? Vector3.Distance(transform.position, targetPlayer.transform.position) : 0f;
             LogIfDebugBuild("TargetPlayer: " + distanceToPlayer);
@@ -624,6 +630,7 @@ namespace LethalGargoyles.src.Enemy
             timeSinceHittingPlayer = 0f;
             DoAnimationClientRpc("startIdle");
             DoAnimationClientRpc("swingAttack");
+            PlayVoice(Plugin.attackClips, "attack");
             player.DamagePlayer(attackDamage, false, true, CauseOfDeath.Bludgeoning);
             if (targetPlayer.isPlayerDead && Plugin.Instance.IsCoronerLoaded) SoftDepends.CoronerClass.CoronerSetCauseOfDeath(player);
             GameNetworkManager.Instance.localPlayerController.JumpToFearLevel(1f);
@@ -636,6 +643,7 @@ namespace LethalGargoyles.src.Enemy
             {
                 return;
             }
+            PlayVoice(Plugin.hitClips, "hit");
             enemyHP -= force;
             if (IsOwner)
             {
@@ -670,17 +678,47 @@ namespace LethalGargoyles.src.Enemy
             }
         }
 
+        public void PlayVoice(List<AudioClip> clipList, string clipType, AudioClip? clip = null)
+        {
+            if (clip != null)
+            {
+                return;
+            }
+            else if (clip == null && clipList != null)
+            {
+                int randInt = Random.Range(0, clipList.Count() - 1);
+                TauntClientRpc(clipList[randInt].name, clipType);
+            }
+        }
+
         public void Taunt()
         {
             string? playerName = null;
             string? priorCauseOfDeath = null;
+            int randSource = Random.Range(1, 4);
+
+            List<(string playerName, string causeOfDeath, string source)> priorDeathCauses = [];
+            List<(string playerName, string causeOfDeath, string source)> getDeathCausesList = GetDeathCauses.previousRoundDeaths;
 
             if (targetPlayer != null)
             {
-                List<(string playerName, string causeOfDeath)> priorDeathCauses = GetDeathCauses.previousRoundDeaths;
-                for (int i = 0; i < priorDeathCauses.Count; i++)
+                for (int i = 0; i < getDeathCausesList.Count(); i++)
                 {
-                    if (priorDeathCauses[i].playerName.Equals(targetPlayer.playerUsername))
+                    if (getDeathCausesList[i].playerName.Equals(targetPlayer.playerUsername))
+                    {
+                        priorDeathCauses.Add(getDeathCausesList[i]);
+                    }
+                }
+
+                for (int i = 0; i < priorDeathCauses.Count(); i++)
+                {
+                    if ((randSource == 1 && priorDeathCauses[i].source == "Vanilla") || !Plugin.Instance.IsCoronerLoaded)
+                    {
+                        playerName = priorDeathCauses[i].playerName;
+                        priorCauseOfDeath = priorDeathCauses[i].causeOfDeath;
+                        LogIfDebugBuild($"{playerName}'s cause of death last round was {priorCauseOfDeath}");
+                    } 
+                    else
                     {
                         playerName = priorDeathCauses[i].playerName;
                         priorCauseOfDeath = priorDeathCauses[i].causeOfDeath;
@@ -691,7 +729,7 @@ namespace LethalGargoyles.src.Enemy
 
             int randInt = Random.Range(1, 100);
 
-            if (randInt < 3)
+            if (randInt == 1)
             {
                 OtherTaunt("enemy", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
             }
@@ -699,15 +737,14 @@ namespace LethalGargoyles.src.Enemy
             {
                 OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
             } 
-            else if(playerName != null && priorCauseOfDeath != null)
+            else if(playerName != null && priorCauseOfDeath != null && !GargoyleIsTalking())
             {
-                creatureVoice.PlayOneShot(FindClip(priorCauseOfDeath, Plugin.priorDeathClips));
+                TauntClientRpc(priorCauseOfDeath, "priordeath");
+            } 
+            else
+            {
+                OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
             }
-        }
-
-        public void ActivityTaunt()
-        {
-            return;
         }
 
         public void OtherTaunt(string clipType, ref int lastTaunt, ref float lastTauntTime, ref float randTime)
@@ -719,20 +756,14 @@ namespace LethalGargoyles.src.Enemy
                 case "general":
                     clipList = Plugin.tauntClips;
                     break;
-                case "enemy":
-                    clipList = Plugin.enemyClips;
-                    break;
                 case "aggro":
                     clipList = Plugin.aggroClips;
                     break;
                 case "death":
                     clipList = Plugin.deathClips;
                     break;
-                case "priordeath":
-                    clipList = Plugin.priorDeathClips;
-                    break;
-                case "action":
-                    clipList = Plugin.activityClips;
+                case "enemy":
+                    clipList = Plugin.enemyClips;
                     break;
             }
 
@@ -886,6 +917,18 @@ namespace LethalGargoyles.src.Enemy
                     break;
                 case "death":
                     clipList = Plugin.deathClips;
+                    break;
+                case "attack":
+                    clipList = Plugin.attackClips;
+                    break;
+                case "hit":
+                    clipList = Plugin.hitClips;
+                    break;
+                case "priordeath":
+                    clipList = Plugin.priorDeathClips;
+                    break;
+                case "playerdeath":
+                    clipList = Plugin.playerDeathClips;
                     break;
             }
             if (clipList.Count > 0)

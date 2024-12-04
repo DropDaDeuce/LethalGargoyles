@@ -8,8 +8,8 @@ namespace LethalGargoyles.src.Patch
     [HarmonyPatch(typeof(StartOfRound))]
     public static class GetDeathCauses
     {
-        public static List<(string playerName, string causeOfDeath)> previousRoundDeaths = [];
-        
+        public static List<(string playerName, string causeOfDeath, string source)> previousRoundDeaths = [];
+
         [HarmonyPatch("ShipLeave")]
         [HarmonyPostfix]
 #pragma warning disable IDE0051 // Remove unused private members
@@ -19,18 +19,26 @@ namespace LethalGargoyles.src.Patch
             Plugin.Logger.LogInfo("Getting Causes of Death.");
             previousRoundDeaths.Clear();
             foreach (PlayerControllerB player in StartOfRound.Instance.allPlayerScripts)
-            if (player.isPlayerDead)
             {
-                if (Plugin.Instance.IsCoronerLoaded)
+                if (player.isPlayerDead)
                 {
-                    string? causeOfDeathString = SoftDepends.CoronerClass.CoronerGetCauseOfDeath(player);
-                    previousRoundDeaths.Add((player.playerUsername, causeOfDeathString ?? player.causeOfDeath.ToString() ?? "Unknown"));
-                    Plugin.Logger.LogInfo($"{player.playerUsername}'s cause of death this round was {causeOfDeathString ?? player.causeOfDeath.ToString()}");
-                }
-                else
-                {
-                    previousRoundDeaths.Add((player.playerUsername, player.causeOfDeath.ToString()));
-                    Plugin.Logger.LogInfo($"{player.playerUsername}'s cause of death this round was {player.causeOfDeath.ToString()}");
+                    string causeOfDeathString;
+                    if (Plugin.Instance.IsCoronerLoaded)
+                    {
+                        causeOfDeathString = player.causeOfDeath.ToString() ?? "Unknown";
+                        Plugin.Logger.LogInfo($"Vanilla caught {player.playerUsername}'s cause of death this round was {causeOfDeathString}");
+                        previousRoundDeaths.Add((player.playerUsername, causeOfDeathString, "Vanilla"));
+
+                        causeOfDeathString = SoftDepends.CoronerClass.CoronerGetCauseOfDeath(player) ?? "Unknown";
+                        Plugin.Logger.LogInfo($"Coroner caught {player.playerUsername}'s cause of death this round was {causeOfDeathString}");
+                        previousRoundDeaths.Add((player.playerUsername, causeOfDeathString, "Coroner"));
+                    }
+                    else
+                    {
+                        causeOfDeathString = player.causeOfDeath.ToString() ?? "Unknown";
+                        previousRoundDeaths.Add((player.playerUsername, causeOfDeathString, "Vanilla"));
+                        Plugin.Logger.LogInfo($"Vanilla caught {player.playerUsername}'s cause of death this round was {causeOfDeathString}");
+                    }
                 }
             }
         }

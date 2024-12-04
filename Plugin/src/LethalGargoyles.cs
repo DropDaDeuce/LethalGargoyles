@@ -34,6 +34,8 @@ namespace LethalGargoyles.src
         public static List<AudioClip> deathClips = [];
         public static List<AudioClip> priorDeathClips = [];
         public static List<AudioClip> activityClips = [];
+        public static List<AudioClip> hitClips = [];
+        public static List<AudioClip> attackClips = [];
 
 #pragma warning disable IDE0051 // Remove unused private members
         private void Awake()
@@ -132,6 +134,14 @@ namespace LethalGargoyles.src
                     else if (clip.name.StartsWith("taunt_activity"))
                     {
                         activityClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("voice_attack"))
+                    {
+                        attackClips.Add(clip);
+                    }
+                    else if (clip.name.StartsWith("voice_hit"))
+                    {
+                        hitClips.Add(clip);
                     }
                 }
             }
