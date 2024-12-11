@@ -35,8 +35,8 @@ Any feedback or voice line requests can be submitted through the following chann
 
 This is my first experience with Unity, C#, models, and animations. Any suggestions for improvement are welcome!
 
+## Add/Replace Voice Lines
 <details>
-<summary style="font-size: 18px; font-weight: bold;">Add/Replace Voice Lines</summary>
 
 **1. Audio Format and Location**
 
