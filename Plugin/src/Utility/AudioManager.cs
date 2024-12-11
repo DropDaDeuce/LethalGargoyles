@@ -41,6 +41,7 @@ public class AudioManager : NetworkBehaviour
         Instance = this;
 
         NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler("SendLGAudioClip", OnReceivedMessage);
+        NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler("TestIt", OnReceivedTest);
         Plugin.Logger.LogInfo("Registered message handler for 'SendLGAudioClip'");
 
         if (IsServer)
@@ -107,6 +108,12 @@ public class AudioManager : NetworkBehaviour
         await SendAudioClipsDelayed(clientId);
     }
 
+    public void OnReceivedTest(ulong clientId, FastBufferReader reader)
+    {
+        reader.ReadValueSafe(out string testString);
+        Plugin.Logger.LogInfo($"{testString}");
+    }
+
     public async Task SendAudioClipsDelayed(ulong clientId)
     {
         bool isPlayerFullyLoaded = false;
@@ -135,6 +142,7 @@ public class AudioManager : NetworkBehaviour
             string category = cat.Key;
             List<string> fileNames = cat.Value;
             List<AudioClip> clipList = GetClipListByCategory(category);
+            Allocator allocator = Allocator.TempJob;
 
             foreach (string fileName in fileNames)
             {
@@ -152,7 +160,6 @@ public class AudioManager : NetworkBehaviour
 
                             try
                             {
-                                FastBufferWriter writer = new(totalBufferSize, Allocator.Persistent);
                                 SendAudioClipToClient(clientId, audioData, clipName, category, writer);
                                 writer.Dispose();
                             }
@@ -210,17 +217,14 @@ public class AudioManager : NetworkBehaviour
 
         Plugin.Logger.LogInfo("writer initialized");
 
+        // Include fragment index and total fragment count
         writer.WriteValueSafe(category);
         writer.WriteValueSafe(clipName);
 
-        if (writer.Capacity < audioData.Length)
         {
-            Plugin.Logger.LogError("Not enough space in buffer for clip length!");
             return;
         }
 
-        writer.WriteValueSafe(audioData.Length);
-        writer.WriteBytesSafe(audioData);
 
         await Task.Delay(100);
 
