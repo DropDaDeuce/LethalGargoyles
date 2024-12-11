@@ -1,8 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using BepInEx.Logging;
-using Coroner;
 using GameNetcodeStuff;
 using LethalGargoyles.src.Patch;
 using Unity.Netcode;

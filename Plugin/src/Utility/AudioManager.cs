@@ -10,9 +10,6 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.Threading.Tasks;
 using System.Threading;
-using static UnityEngine.UIElements.UxmlAttributeDescription;
-using System.Xml.Linq;
-using UnityEngine.Android;
 
 namespace LethalGargoyles.src.Utility;
 public class AudioManager : NetworkBehaviour
@@ -81,7 +78,11 @@ public class AudioManager : NetworkBehaviour
         attackClips.Clear();
         hitClips.Clear();
 
-        NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnectedCallback;
+        if (IsServer)
+        {
+            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnectedCallback;
+            NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnectedCallback;
+        }
     }
 
     private IEnumerator LogClipCounts()
@@ -122,19 +123,27 @@ public class AudioManager : NetworkBehaviour
     {
         bool isPlayerFullyLoaded = false;
         List<ulong> fullyLoadedPlayers = StartOfRound.Instance.fullyLoadedPlayers;
-        while (!isPlayerFullyLoaded || !clientReady.ContainsKey(clientId))
+
+        CancellationTokenSource cts = new();
+        cts.CancelAfter(TimeSpan.FromSeconds(10));
+
+        await Task.Run(() =>
         {
-            Plugin.Logger.LogInfo($"Client: {clientId}, is still loading.");
-            for (int i = 0; i < fullyLoadedPlayers.Count; i++)
+            while (!isPlayerFullyLoaded || !clientReady.ContainsKey(clientId))
             {
-                if (fullyLoadedPlayers[i] == clientId)
+                Plugin.Logger.LogInfo($"Client: {clientId}, is still loading.");
+                for (int i = 0; i < fullyLoadedPlayers.Count; i++)
                 {
-                    isPlayerFullyLoaded = true;
-                    break;
+                    if (fullyLoadedPlayers[i] == clientId)
+                    {
+                        isPlayerFullyLoaded = true;
+                        break;
+                    }
                 }
+
+                Task.Yield();
             }
-            await Task.Yield();
-        }
+        }, cts.Token);
 
         foreach (var cat in AudioClipFilePaths)
         {
@@ -169,7 +178,7 @@ public class AudioManager : NetworkBehaviour
 
     private async Task WaitForClientReady(ulong clientId)
     {
-        CancellationTokenSource cts = new CancellationTokenSource();
+        CancellationTokenSource cts = new();
         cts.CancelAfter(TimeSpan.FromSeconds(5)); // Set timeout to 5 seconds
 
         try
@@ -393,10 +402,10 @@ public class AudioManager : NetworkBehaviour
                 { "Hit", new List<string>() }
             };
 
-        foreach (var kvp in AudioClipFilePaths)
+        foreach (var cat in AudioClipFilePaths)
         {
-            string category = kvp.Key;
-            List<string> fileNames = kvp.Value;
+            string category = cat.Key;
+            List<string> fileNames = cat.Value;
 
             // Get files from both folders
             FileInfo[] defaultFiles = GetMP3Files(category, "Voice Lines");
@@ -436,10 +445,10 @@ public class AudioManager : NetworkBehaviour
 
         // 2. Bind config entries and load audio clips
 
-        foreach (var kvp in AudioClipFilePaths)
+        foreach (var cat in AudioClipFilePaths)
         {
-            string category = kvp.Key;
-            List<string> fileNames = kvp.Value;
+            string category = cat.Key;
+            List<string> fileNames = cat.Value;
 
             foreach (string fileName in fileNames)
             {

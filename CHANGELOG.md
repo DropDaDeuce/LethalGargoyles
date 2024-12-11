@@ -1,64 +1,78 @@
 ## 0.2.0
-- Reworked how audio is loaded
-    - Voice Lines are now separated from the asset bundle and put into folders inside the plugins folder.
-    - Host loads audio lists when starting a game
-    - Clients will load audio from host on join
-    - Another folder is created called 'Custom Voice Lines'
-        - This can be used to replace/add voice lines. More info located in the "CustomVoiceLines.txt" file.
-- Fixed enemy warning taunts
-- Ships with library for NVorbis
-    - I'm using this library to convert byte arrays into the original ogg files, which can then be converted to AudioClip
-- New dependency on Concentus
-    - This has System.Memory, System.Buffers, System.Nemeric.Vectors, and System.Runtime.CompilerServeices.Unsafe.
-        - All of these are needed for NVorbis to function.
 
-## 0.1.0
+**Changes:**
 
-- Added soft dependancy on Coroner 
-    - For custom cause of death for gargoyle.
-    - Allows access to more causes of deaths in prior death taunts.
-- Mod now tracks prior round deaths
-    -  Adding 78 more taunts relating to cause of death. (18 from vanilla, 60 from Coroner.)
-    - Gargoyle will now taunt it's target with how they died the last round.
-- Added 3 aggro and 2 general taunts.
-- 2 Gargoyle Attack Voice Lines and 2 Gargoyle Hit Voice Lines
-- A few tweaks to the settings.
-- Accidently set Gargoyles health to 0 at some point. Set back to 6 as intended.
-- Adjusted Gargoyles aggro state to be harder to counter play.
-- Fixed Gargoyles attacks being more than 1 per second.
-- Reduced max distance of Gargoyle voice to 3* normal instead of 4*
+- **Audio System Rework:**
+    - Voice lines are now loaded from folders within the plugin's directory instead of the asset bundle.
+    - The host loads audio lists at the start of a game.
+    - Clients receive audio data from the host upon joining.
+    - Added a "Custom Voice Lines" folder for replacing or adding custom voice lines (see `CustomVoiceLines.txt` for details).
+- **Bug Fixes:**
+    - Fixed enemy warning taunts.
+
+**Dependencies:**
+
+- Added NVorbis library for OGG decoding.
+- Added Concentus dependency for required system libraries:
+    - `System.Memory`
+    - `System.Buffers`
+    - `System.Numeric.Vectors`
+    - `System.Runtime.CompilerServices.Unsafe`
+
+## v0.1.0 
+
+**New Features:**
+
+- **Coroner Integration:**
+    - Added soft dependency on the Coroner mod for custom causes of death.
+    - Expanded prior death taunts to include causes of death from the base game and the Coroner mod (78 new taunts).
+    - The gargoyle now taunts its target based on how they died in the previous round.
+- **New Voice Lines:**
+    - Added 3 new aggro taunts.
+    - Added 2 new general taunts.
+    - Added 2 gargoyle attack voice lines.
+    - Added 2 gargoyle hit voice lines.
+- **Gameplay Adjustments:**
+    - Adjusted gargoyle aggro state to be more challenging.
+    - Fixed gargoyle attack rate to prevent exceeding 1 attack per second.
+    - Reduced the maximum distance of gargoyle voice lines.
+    - Fixed enemy clips being incorrectly included in general taunts.
+    - Reduced the default idle range from 30 to 20 to improve target following.
+
+**Bug Fixes:**
+
+- Fixed an issue where the gargoyle's health was accidentally set to 0.
 - Fixed enemy clips being pulled into general taunts.
-- Default Idle config reduced from 30 to 20. That way Gargoyles should follow their target a bit more closely.
-    - You will need to update your config yourself if you installed this before this update and you want to see this change.
 
-## 0.0.5
+## v0.0.5
 
-- Some pathing and code optimizations.
-- Fixed a lot of pathing issues.
+**Changes:**
 
-## 0.0.4
+- Optimized pathfinding and code for improved performance.
+- Fixed various pathfinding issues.
 
-- Fixed Read Me name spellings
+## v0.0.4
 
-## 0.0.3
+- Fixed spelling errors in the README.
 
-- Another fix for him getting angry permanently.
-- Seperated enemy taunts from the general list and made it a seperate chance to play a false enemy taunt. They were playing too frequently.
-- Decreased the chance of a true enemy taunt.
-- Animation dysnc fix
-- Fix for small chance of taunt desyncs.
-- Increased aggro taunt timer.
-- Hopefully fixed the swing attack.
+## v0.0.3
+
+- Fixed an issue where the gargoyle could become permanently angry.
+- Separated enemy taunts from general taunts and reduced their frequency.
+- Fixed animation desynchronization issues.
+- Fixed potential taunt desynchronization issues.
+- Increased the aggro taunt timer.
+- Fixed the swing attack.
 - Fixed gargoyles talking at the same time.
 
-## 0.0.2
+## v0.0.2
 
-- Fixed Gargoyle not wandering
-- Added voice line sync between clients
-- Increased idle range
-- Added a more dynamic approach to animations. This should hopefully stop the walking in place.
-- Added more logic to finding a hiding spot to hopefully prevent him from getting permanently angry.
+- Fixed an issue where the gargoyle would not wander.
+- Added voice line synchronization between clients.
+- Increased the idle range.
+- Improved animation handling to prevent walking in place.
+- Added logic to prevent the gargoyle from getting permanently angry.
 
-## 0.0.1
+## v0.0.1
 
-- Initial release
+- Initial release.
