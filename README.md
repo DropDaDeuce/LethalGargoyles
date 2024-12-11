@@ -1,24 +1,75 @@
 # Lethal Gargoyles!
 
-This gargoyle's goal is to follow you around, and annoy you. But be wary, he's not so passive if you don't respect his space.
-He is voiced by yours truely, with 140 voice lines (more will be added as time goes on).
+This mischievous gargoyle's goal is to follow you around and annoy you with his witty taunts. But be wary, he's not so passive if you don't respect his space!
+
+**Features:**
+
+* **Voiced Gargoyle:**  Features the voice of the modder, with over 140 unique voice lines (and more to come!).
+* **Dynamic Behavior:** The gargoyle tries to stay close while remaining hidden, but will become aggressive if you get too close.
+* **Varied Taunts:**  Includes a wide range of taunts for different situations, including general taunts, aggro responses, death reactions, and more.
+* **Customizable Voice Lines:**  Add or replace voice lines with your own custom OGG files.
+* **Configuration Options:** Disable specific voice lines or adjust other settings through the mod's configuration file.
 
 <details>
 <summary>Gargoyle Behavior (Spoilers)</summary>
-<pre>
-His goal is to annoy the player. Because of this he is mostly passive, and will try to stay close and out of sight of all players. Currently he's not to great at the staying out of sight part, but he tries. 
-If the player gets within his aggro range, he will start chasing them and hitting them. On rare occasions he can push you into walls, please be carefull of this, I'm trying to fix it.
-His taunts vary and currently have several catagories: General, Aggro, Gargoyle Death, Player Death, Enemy Proximity, and Prior Death.
-</pre>
+
+The gargoyle's primary goal is to annoy the player. It will try to stay close while remaining hidden, but its stealth skills are still under development. If the player enters its aggro range, it will chase and attack them. Be careful, as it might occasionally push you into walls (a bug that's being worked on).
+
+The gargoyle's taunts are categorized as follows:
+
+* General
+* Aggro
+* Gargoyle Death
+* Player Death
+* Enemy Proximity
+* Prior Death
+
 </details>
 
-Any feedback can be posted to my Github repo (link at the top of the page), or my forum in the [Lethal Company Modding Discord community](https://discord.com/channels/1168655651455639582/1312527029455032394). 
+## Feedback and Requests
 
-This is my first experience with Unity, C#, models, and animations. If you see any way I can improve the code, model, or the mod in general please let me know!
+Any feedback or voice line requests can be submitted through the following channels:
 
-I'm willing to take voice line requests for this mod. I can't guarantee that each request will be approved.
+* **GitHub Repo:** https://github.com/DropDaDeuce/LethalGargoyles
+* **Lethal Company Modding Discord:** https://discord.com/channels/1168655651455639582/1312527029455032394
 
-## Current voice lines
+This is my first experience with Unity, C#, models, and animations. Any suggestions for improvement are welcome!
+
+<details>
+<summary style="font-size: 18px; font-weight: bold;">Add/Replace Voice Lines</summary>
+
+**1. Audio Format and Location**
+
+- All custom voice lines **must be in OGG format**. Other formats (MP3, WAV, etc.) are not supported.
+- Place your custom OGG files in the **"Custom Voice Lines"** folder located within your Lethal Company game directory (e.g., `C:\Program Files (x86)\Steam\steamapps\common\Lethal Company\Custom Voice Lines`).
+- **Do not** place custom voice lines in the "Voice Lines" folder.
+
+**2.  Voice Line Categories**
+
+Voice lines are organized into the following categories:
+
+- Combat Dialog
+- Taunt - Activity
+- Taunt - Aggro
+- Taunt - Enemy
+- Taunt - Gargoyle Death
+- Taunt - General
+- Taunt - Player Death
+- Taunt - Prior Death
+
+**3.  Naming Conventions**
+
+- **Hardcoded Categories:** For the categories "Taunt - Activity," "Taunt - Enemy," and "Taunt - Prior Death," your custom audio file names **must match** the original file names to replace them.
+    - For example, to replace the "taunt_priordeath_Abandoned" voice line, your custom OGG file must also be named "taunt_priordeath_Abandoned.ogg".
+- **Other Categories:** For the remaining categories, you can use any file name for your custom OGG files. Simply place them in the corresponding folder within "Custom Voice Lines."
+
+**4. Disabling Voice Lines**
+
+- If you want to disable a specific voice line, you can do so through the mod's configuration file.
+
+</details>
+
+## Current Voice Lines
 
 <details>
 <summary>General (General taunts that play randomly during gameplay)</summary>
@@ -178,6 +229,7 @@ I'm willing to take voice line requests for this mod. I can't guarantee that eac
 <pre>"They say 'curiosity killed the cat'. Well, it also killed the employee who wandered too far! Hahahaha!"</pre>
 <pre>"I can't believe it! You actually died of embarrassment! Hahahaha!" - Submitted by ThePatienceToad</pre>
 <pre>"Thought ye could outsmart one of our own, did ye? Yer body sure did make a bloody good chair!"</pre>
+</details>
 </details>
 
 ## To Do

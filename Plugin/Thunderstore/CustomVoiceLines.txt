@@ -2,6 +2,8 @@ All audio files for voice lines need to be ogg format. I currently can not suppo
 
 The clients do not need the custom audio files, only the host. All audio files are loaded on the hosts end when a new game is started. Clients will then be sent the audio upon joining.
 
+You can find "Custom Voice Lines" in the Lethal Company game folder. Usually located in your steam directory. For example "C:\Program Files (x86)\Steam\steamapps\common\Lethal Company"
+
 Please refrain from placing voice files in the "Voice Lines" folder. "Custom Voice Lines" is specifically for this purpose.
 If you'd simply like to turn a voice line off, you can disable it in the config.
 

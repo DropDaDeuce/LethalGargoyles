@@ -6,6 +6,11 @@
     - Another folder is created called 'Custom Voice Lines'
         - This can be used to replace/add voice lines. More info located in the "CustomVoiceLines.txt" file.
 - Fixed enemy warning taunts
+- Ships with library for NVorbis
+    - I'm using this library to convert byte arrays into the original ogg files, which can then be converted to AudioClip
+- New dependency on Concentus
+    - This has System.Memory, System.Buffers, System.Nemeric.Vectors, and System.Runtime.CompilerServeices.Unsafe.
+        - All of these are needed for NVorbis to function.
 
 ## 0.1.0
 
