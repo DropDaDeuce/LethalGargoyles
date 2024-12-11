@@ -41,7 +41,6 @@ public class AudioManager : NetworkBehaviour
         Instance = this;
 
         NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler("SendLGAudioClip", OnReceivedMessage);
-        NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler("TestIt", OnReceivedTest);
         Plugin.Logger.LogInfo("Registered message handler for 'SendLGAudioClip'");
 
         if (IsServer)
@@ -96,25 +95,17 @@ public class AudioManager : NetworkBehaviour
         LogIfDebugBuild("Loaded gargoyle voice hit taunt clips count: " + hitClips.Count);
     }
 
-    private async void OnClientConnectedCallback(ulong clientId)
+    private void OnClientConnectedCallback(ulong clientId)
     {
         string testString = "THIS IS A TEST";
         FastBufferWriter writer = new(1024, Allocator.Temp);
         writer.WriteValueSafe(testString);
 
-        if (!IsServer) return;
         Plugin.Logger.LogInfo($"Client connected: {clientId}");
-        NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage("TestIt", clientId, writer, NetworkDelivery.ReliableFragmentedSequenced);
-        await SendAudioClipsDelayed(clientId);
+        SendAudioClipsDelayed(clientId);
     }
 
-    public void OnReceivedTest(ulong clientId, FastBufferReader reader)
-    {
-        reader.ReadValueSafe(out string testString);
-        Plugin.Logger.LogInfo($"{testString}");
-    }
-
-    public async Task SendAudioClipsDelayed(ulong clientId)
+    public async void SendAudioClipsDelayed(ulong clientId)
     {
         bool isPlayerFullyLoaded = false;
         List<ulong> fullyLoadedPlayers = StartOfRound.Instance.fullyLoadedPlayers;
@@ -129,54 +120,32 @@ public class AudioManager : NetworkBehaviour
                     break;
                 }
             }
-            
-            // If not loaded, wait a short time before checking again
-            if (!isPlayerFullyLoaded)
-                await Task.Delay(100); // Adjust wait time as needed
+            await Task.Yield();
         }
-
-        await Task.Delay(1000);
 
         foreach (var cat in AudioClipFilePaths)
         {
             string category = cat.Key;
             List<string> fileNames = cat.Value;
             List<AudioClip> clipList = GetClipListByCategory(category);
-            Allocator allocator = Allocator.TempJob;
 
             foreach (string fileName in fileNames)
             {
                 string clipName = Path.GetFileNameWithoutExtension(fileName);
                 if (AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry) && configEntry.Value)
                 {
-                    byte[]? audioData = await AudioFileToByteArray(fileName);
+                    byte[]? audioData = AudioFileToByteArray(fileName);
                     if (audioData != null)
                     {
-                        Task sendTask = Task.Run(() =>
-                        {
-                            Plugin.Logger.LogInfo($"Sending Clip({clipName}) to ClientID({clientId})");
-                            int totalBufferSize = audioData.Length + 200;
-                            Plugin.Logger.LogInfo($"Initializing the writer with length of: {totalBufferSize}");
-
-                            try
-                            {
-                                SendAudioClipToClient(clientId, audioData, clipName, category, writer);
-                                writer.Dispose();
-                            }
-                            catch (Exception ex)
-                            {
-                                Plugin.Logger.LogError("Failed to Initialize FastBufferWriter: " + ex.ToString());
-                                throw;
-                            }
-                        });
+                        Plugin.Logger.LogInfo($"Sending Clip({clipName}) to ClientID({clientId})");
+                        SendAudioClipToClient(clientId, audioData, clipName, category);
                     }
                 }
-                //await Task.Delay(100);
             }
         }
     }
 
-    private async Task<byte[]?> AudioFileToByteArray(string filePath)
+    private byte[]? AudioFileToByteArray(string filePath)
     {
         // Determine AudioType based on file extension
         AudioType audioType = Path.GetExtension(filePath).ToLower() switch
@@ -198,7 +167,7 @@ public class AudioManager : NetworkBehaviour
         var operation = webRequest.SendWebRequest();
         while (!operation.isDone)
         {
-            await Task.Yield();
+            Task.Yield();
         }
 
         if (webRequest.result == UnityWebRequest.Result.ProtocolError)
@@ -212,8 +181,11 @@ public class AudioManager : NetworkBehaviour
         }
     }
 
-    private async void SendAudioClipToClient(ulong clientId, byte[] audioData, string clipName, string category, FastBufferWriter writer)
+    private void SendAudioClipToClient(ulong clientId, byte[] audioData, string clipName, string category)
     {
+        int totalBufferSize = audioData.Length + 200;
+        Plugin.Logger.LogInfo($"Initializing the writer with length of: {totalBufferSize}");
+        using FastBufferWriter writer = new(totalBufferSize, Allocator.Temp);
 
         Plugin.Logger.LogInfo("writer initialized");
 
@@ -221,23 +193,17 @@ public class AudioManager : NetworkBehaviour
         writer.WriteValueSafe(category);
         writer.WriteValueSafe(clipName);
 
+        if (writer.Capacity < audioData.Length)
         {
+            Plugin.Logger.LogError("Writer Capacity is less than clip size!");
             return;
         }
 
-
-        await Task.Delay(100);
+        writer.WriteValueSafe(audioData.Length);
+        writer.WriteBytesSafe(audioData, audioData.Length, 0);
 
         Plugin.Logger.LogInfo("Sending Clip!");
-        try
-        {
-            NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage("SendLGAudioClip", clientId, writer, NetworkDelivery.ReliableFragmentedSequenced);
-        }
-        catch (Exception ex)
-        {
-            Plugin.Logger.LogError("Failed To Send Clip: " + ex.ToString());
-            throw;
-        }
+        NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage("SendLGAudioClip", clientId, writer, NetworkDelivery.ReliableFragmentedSequenced);
     }
 
     // Client-side: Handle the incoming audio clip data
@@ -271,6 +237,7 @@ public class AudioManager : NetworkBehaviour
         List<AudioClip> clipList = GetClipListByCategory(category);
         clipList.Add(clip);
         Plugin.Logger.LogInfo("Clip Loaded: " + clip.name);
+        StartOfRound.Instance.ship3DAudio.PlayOneShot(clip);
         yield return null;
     }
 
