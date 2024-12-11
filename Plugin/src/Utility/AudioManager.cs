@@ -10,6 +10,9 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.Threading.Tasks;
 using System.Threading;
+using static UnityEngine.UIElements.UxmlAttributeDescription;
+using System.Xml.Linq;
+using UnityEngine.Android;
 
 namespace LethalGargoyles.src.Utility;
 public class AudioManager : NetworkBehaviour
@@ -269,8 +272,29 @@ public class AudioManager : NetworkBehaviour
     }
 
     private IEnumerator ProcessAudioClip(byte[] audioData, string clipName, string category)
-    { 
-            //Using NVorbis from https://www.nuget.org/packages/NVorbis/
+    {       
+            //Copyright provided for use of NVorbis. The code below is of my own writing,
+            //But some of the methods and types used to make this work are from NVorbis.
+
+            /* Copyright (c) 2020 Andrew Ward (NVorbis library)
+            Permission is hereby granted, free of charge, to any person obtaining a copy
+            of this software and associated documentation files(the "Software"), to deal
+            in the Software without restriction, including without limitation the rights
+            to use, copy, modify, merge, publish, distribute, sublicense, and/ or sell
+            copies of the Software, and to permit persons to whom the Software is
+            furnished to do so, subject to the following conditions:
+
+                    The above copyright notice and this permission notice shall be included in all
+                    copies or substantial portions of the Software.
+
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+            IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+            FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+            AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+            LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+            OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+            SOFTWARE.*/
+
             using var vorbis = new NVorbis.VorbisReader(new MemoryStream(audioData, false));
 
             var audioBuffer = new float[vorbis.TotalSamples]; // Just dump everything

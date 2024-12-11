@@ -242,10 +242,12 @@ Voice lines are organized into the following categories:
  - Find more ways for him to be mischievous. (Keeping the theme of him trying to stay hidden)
 
 ### Credits:
- - Evaisa for creating LethalLib.
- - Hamunii for Example Enemy.
- - Xu Xiaolan for the youtube tutorial.
- - RichAudio, Syiacka, and Nightare for testing with me.
+ - **Evaisa** for creating LethalLib.
+ - **Hamunii** for Example Enemy.
+ - **Xu Xiaolan** for the youtube tutorial.
+ - **qwbarch** for uploading Concentus
+ - **NVorbis:** This mod uses the NVorbis library for decoding OGG files. You can find the library and its source code here: [https://github.com/NVorbis/NVorbis](https://github.com/NVorbis/NVorbis)
+ - **RichAudio**, **Syiacka**, and **Nightare** for testing with me.
 
 <details>
 <summary>Gargoyle Model Credit/Copyright - Original model by Lionhead Studios - Extracted by CharlieVet on cults3d.com - Modified by DropDaDeuce & Syiacka</summary>
