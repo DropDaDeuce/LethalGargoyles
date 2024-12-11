@@ -9,6 +9,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Networking;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace LethalGargoyles.src.Utility;
 public class AudioManager : NetworkBehaviour
@@ -22,12 +23,11 @@ public class AudioManager : NetworkBehaviour
     public static List<AudioClip> activityClips = [];
     public static List<AudioClip> attackClips = [];
     public static List<AudioClip> hitClips = [];
-
-    private static readonly Plugin _instance = Plugin.Instance;
     public static AudioManager? Instance;
 
     public static Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
     public static Dictionary<string, List<string>> AudioClipFilePaths { get; private set; } = [];
+    private readonly Dictionary<ulong, bool> clientReady = [];
 
     [Conditional("DEBUG")]
     static void LogIfDebugBuild(string text)
@@ -46,6 +46,7 @@ public class AudioManager : NetworkBehaviour
         if (IsServer)
         {
             NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnectedCallback;
+            NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnectedCallback;
         }
         else
         {
@@ -97,19 +98,28 @@ public class AudioManager : NetworkBehaviour
 
     private void OnClientConnectedCallback(ulong clientId)
     {
-        string testString = "THIS IS A TEST";
-        FastBufferWriter writer = new(1024, Allocator.Temp);
-        writer.WriteValueSafe(testString);
-
         Plugin.Logger.LogInfo($"Client connected: {clientId}");
+        // Ensure the client entry exists before starting the coroutine
+        if (!clientReady.ContainsKey(clientId))
+        {
+            clientReady.Add(clientId, true );
+        }
         SendAudioClipsDelayed(clientId);
+    }
+
+    private void OnClientDisconnectedCallback(ulong clientId)
+    {
+        if (clientReady.ContainsKey(clientId))
+        {
+            clientReady.Remove(clientId);
+        }
     }
 
     public async void SendAudioClipsDelayed(ulong clientId)
     {
         bool isPlayerFullyLoaded = false;
         List<ulong> fullyLoadedPlayers = StartOfRound.Instance.fullyLoadedPlayers;
-        while (!isPlayerFullyLoaded)
+        while (!isPlayerFullyLoaded || !clientReady.ContainsKey(clientId))
         {
             Plugin.Logger.LogInfo($"Client: {clientId}, is still loading.");
             for (int i = 0; i < fullyLoadedPlayers.Count; i++)
@@ -135,13 +145,49 @@ public class AudioManager : NetworkBehaviour
                 if (AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry) && configEntry.Value)
                 {
                     byte[]? audioData = AudioFileToByteArray(fileName);
-                    if (audioData != null)
+                    if (audioData?.Length > 512000)
                     {
-                        Plugin.Logger.LogInfo($"Sending Clip({clipName}) to ClientID({clientId})");
-                        SendAudioClipToClient(clientId, audioData, clipName, category);
+                        Plugin.Logger.LogError("Sending Clip({clipName}) failed. Max clip size is 512000 bytes or 500KB");
+                        break;
+                    }
+                    else if (audioData != null)
+                    {
+                        await WaitForClientReady(clientId);
+                        if (!clientReady.ContainsKey(clientId)) break;
+                        await SendAudioClipToClient(clientId, audioData, clipName, category);
+                        clientReady[clientId] = false;
+                        SetClientReadyClientRpc(false, clientId); // Still use ClientRpc to notify the client
+                        Plugin.Logger.LogInfo($"Sent Clip({clipName}) to ClientID({clientId})");
                     }
                 }
             }
+        }
+    }
+
+    private async Task WaitForClientReady(ulong clientId)
+    {
+        CancellationTokenSource cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromSeconds(5)); // Set timeout to 5 seconds
+
+        try
+        {
+            await Task.Run(async () =>
+            {
+                while (!clientReady[clientId])
+                {
+                    await Task.Delay(100, cts.Token); // Use cancellation token with Task.Delay
+                }
+            }, cts.Token); // Pass cancellation token to Task.Run
+        }
+        catch (OperationCanceledException)
+        {
+            if (!clientReady.ContainsKey(clientId))
+            {
+                Plugin.Logger.LogWarning($"Client {clientId} is disconnected.");
+                return;
+            }
+            Plugin.Logger.LogWarning($"Client {clientId} did not respond within the timeout, trying to send clip anyways.");
+            clientReady[clientId] = true;
         }
     }
 
@@ -181,7 +227,7 @@ public class AudioManager : NetworkBehaviour
         }
     }
 
-    private void SendAudioClipToClient(ulong clientId, byte[] audioData, string clipName, string category)
+    private async Task SendAudioClipToClient(ulong clientId, byte[] audioData, string clipName, string category)
     {
         int totalBufferSize = audioData.Length + 200;
         Plugin.Logger.LogInfo($"Initializing the writer with length of: {totalBufferSize}");
@@ -203,17 +249,14 @@ public class AudioManager : NetworkBehaviour
         writer.WriteBytesSafe(audioData, audioData.Length, 0);
 
         Plugin.Logger.LogInfo("Sending Clip!");
-        NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage("SendLGAudioClip", clientId, writer, NetworkDelivery.ReliableFragmentedSequenced);
+        NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage("SendLGAudioClip", clientId, writer, NetworkDelivery.ReliableFragmentedSequenced); 
+        await Task.Yield();
     }
 
     // Client-side: Handle the incoming audio clip data
     public void OnReceivedMessage(ulong clientId, FastBufferReader messagePayload)
     {
-        Plugin.Logger.LogInfo("Received Clip From The Host Step 1");
-
         if (IsServer || IsHost) return; // Don't process on the server or host
-
-        Plugin.Logger.LogInfo("Received Clip From The Host Step 2");
 
         messagePayload.ReadValueSafe(out string category);
         messagePayload.ReadValueSafe(out string clipName);
@@ -221,24 +264,24 @@ public class AudioManager : NetworkBehaviour
         byte[] audioData = new byte[audioDataLength];
         messagePayload.ReadBytesSafe(ref audioData, audioDataLength);
 
-        //Using NVorbis from https://www.nuget.org/packages/NVorbis/
         StartCoroutine(ProcessAudioClip(audioData, clipName, category));
+        SetClientReadyServerRpc(true, NetworkManager.Singleton.LocalClientId);
     }
 
     private IEnumerator ProcessAudioClip(byte[] audioData, string clipName, string category)
-    {
-        using var vorbis = new NVorbis.VorbisReader(new MemoryStream(audioData, false));
+    { 
+            //Using NVorbis from https://www.nuget.org/packages/NVorbis/
+            using var vorbis = new NVorbis.VorbisReader(new MemoryStream(audioData, false));
 
-
-        var audioBuffer = new float[vorbis.TotalSamples]; // Just dump everything
-        AudioClip clip = AudioClip.Create(clipName, (int)(vorbis.TotalSamples / vorbis.Channels), vorbis.Channels, vorbis.SampleRate, false);
-        int read = vorbis.ReadSamples(audioBuffer, 0, (int)vorbis.TotalSamples);
-        clip.SetData(audioBuffer, 0); // <-- your clip Remember to destroy when not use anymore
-        List<AudioClip> clipList = GetClipListByCategory(category);
-        clipList.Add(clip);
-        Plugin.Logger.LogInfo("Clip Loaded: " + clip.name);
-        StartOfRound.Instance.ship3DAudio.PlayOneShot(clip);
-        yield return null;
+            var audioBuffer = new float[vorbis.TotalSamples]; // Just dump everything
+            AudioClip clip = AudioClip.Create(clipName, (int)(vorbis.TotalSamples / vorbis.Channels), vorbis.Channels, vorbis.SampleRate, false);
+            int read = vorbis.ReadSamples(audioBuffer, 0, (int)vorbis.TotalSamples);
+            clip.SetData(audioBuffer, 0); // <-- your clip Remember to destroy when not use anymore
+            List<AudioClip> clipList = GetClipListByCategory(category);
+            clipList.Add(clip);
+            Plugin.Logger.LogInfo("Clip Loaded: " + clip.name);
+            StartOfRound.Instance.ship3DAudio.PlayOneShot(clip);
+            yield return true;
     }
 
     public void LoadAudioClipsFromConfig()
@@ -254,7 +297,7 @@ public class AudioManager : NetworkBehaviour
                 string clipName = Path.GetFileNameWithoutExtension(fileName);
                 if (AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry) && configEntry.Value)
                 {
-                    _instance.StartCoroutine(LoadAudioClip(fileName, category));
+                    StartCoroutine(LoadAudioClip(fileName, category));
                 }
             }
         }
@@ -310,6 +353,7 @@ public class AudioManager : NetworkBehaviour
             _ => throw new ArgumentException($"Invalid audio clip category: {category}"),// Or throw an exception
         };
     }
+
     public void LoadClipList()
     {
         // Use a dictionary to store the config entries for audio clips
@@ -380,7 +424,7 @@ public class AudioManager : NetworkBehaviour
                 // Create config entry if it doesn't exist
                 if (!AudioClipEnableConfig.ContainsKey(clipName))
                 {
-                    AudioClipEnableConfig[clipName] = _instance.Config.Bind(
+                    AudioClipEnableConfig[clipName] = Plugin.Instance.Config.Bind(
                         "Audio." + category,
                         $"Enable {clipName}",
                         true,
@@ -397,9 +441,9 @@ public class AudioManager : NetworkBehaviour
 
         string? folderLoc = folderName switch
         {
-            "Voice Lines" => Path.Combine(Path.GetDirectoryName(_instance.Info.Location),folderName),
+            "Voice Lines" => Path.Combine(Path.GetDirectoryName(Plugin.Instance.Info.Location),folderName),
             "Custom Voice Lines" => Plugin.CustomAudioFolderPath,
-            _ => Path.Combine(Path.GetDirectoryName(_instance.Info.Location), folderName),
+            _ => Path.Combine(Path.GetDirectoryName(Plugin.Instance.Info.Location), folderName),
         };
         
         switch (type)
@@ -433,5 +477,26 @@ public class AudioManager : NetworkBehaviour
                 return directoryInfo.GetFiles("*.*");
         }
         return [];
+    }
+
+    [ClientRpc]
+    private void SetClientReadyClientRpc(bool isReady, ulong clientId)
+    {
+        // No need to access a NetworkVariable, just update the dictionary
+        if (clientReady.ContainsKey(NetworkManager.Singleton.LocalClientId) &&
+            NetworkManager.Singleton.LocalClientId == clientId)
+        {
+            clientReady[NetworkManager.Singleton.LocalClientId] = isReady;
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void SetClientReadyServerRpc(bool isReady, ulong clientId)
+    {
+        // Update the client's readiness in the dictionary on the server
+        if (clientReady.ContainsKey(clientId))
+        {
+            clientReady[clientId] = isReady;
+        }
     }
 }
