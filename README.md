@@ -43,6 +43,7 @@ This is my first experience with Unity, C#, models, and animations. Any suggesti
 - All custom voice lines **must be in OGG format**. Other formats (MP3, WAV, etc.) are not supported.
 - Place your custom OGG files in the **"Custom Voice Lines"** folder located within your Lethal Company game directory (e.g., `C:\Program Files (x86)\Steam\steamapps\common\Lethal Company\Custom Voice Lines`).
 - **Do not** place custom voice lines in the "Voice Lines" folder.
+- There is a maximum size of **500KB** on the ogg files, due to steam networking limitations on network messages.
 
 **2.  Voice Line Categories**
 

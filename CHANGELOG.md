@@ -1,17 +1,15 @@
-## 0.2.0
-
-**Changes:**
+## v0.2.0 Custom Voices Update
 
 - **Audio System Rework:**
     - Voice lines are now loaded from folders within the plugin's directory instead of the asset bundle.
     - The host loads audio lists at the start of a game.
     - Clients receive audio data from the host upon joining.
     - Added a "Custom Voice Lines" folder for replacing or adding custom voice lines (see `CustomVoiceLines.txt` for details).
+
 - **Bug Fixes:**
     - Fixed enemy warning taunts.
 
-**Dependencies:**
-
+**Dependency Changes:**
 - Added NVorbis library for OGG decoding.
 - Added Concentus dependency for required system libraries:
     - `System.Memory`

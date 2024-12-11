@@ -269,7 +269,7 @@ public class AudioManager : NetworkBehaviour
     public void OnReceivedMessage(ulong clientId, FastBufferReader messagePayload)
     {
         if (IsServer || IsHost) return; // Don't process on the server or host
-
+        SetClientReadyServerRpc(true, NetworkManager.Singleton.LocalClientId);
         messagePayload.ReadValueSafe(out string category);
         messagePayload.ReadValueSafe(out string clipName);
         messagePayload.ReadValueSafe(out int audioDataLength); // Read fragment length
@@ -277,7 +277,6 @@ public class AudioManager : NetworkBehaviour
         messagePayload.ReadBytesSafe(ref audioData, audioDataLength);
 
         StartCoroutine(ProcessAudioClip(audioData, clipName, category));
-        SetClientReadyServerRpc(true, NetworkManager.Singleton.LocalClientId);
     }
 
     private IEnumerator ProcessAudioClip(byte[] audioData, string clipName, string category)
@@ -313,8 +312,8 @@ public class AudioManager : NetworkBehaviour
             List<AudioClip> clipList = GetClipListByCategory(category);
             clipList.Add(clip);
             Plugin.Logger.LogInfo("Clip Loaded: " + clip.name);
-            StartOfRound.Instance.ship3DAudio.PlayOneShot(clip);
-            yield return true;
+            //StartOfRound.Instance.ship3DAudio.PlayOneShot(clip);
+            yield break;
     }
 
     public void LoadAudioClipsFromConfig()

@@ -198,6 +198,7 @@ namespace LethalGargoyles.src.Enemy
                             StartSearch(transform.position);
                             lastGenTauntTime = 0f;
                             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
+                            SearchForPlayers();
                             return;
                         }
                         creatureSFX.volume = 0.5f;
