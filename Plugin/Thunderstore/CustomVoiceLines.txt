@@ -1,0 +1,18 @@
+All audio files for voice lines need to be ogg format. I currently can not support mp3, wav, flak, etc.
+
+The clients do not need the custom audio files, only the host. All audio files are loaded on the hosts end when a new game is started. Clients will then be sent the audio upon joining.
+
+Please refrain from placing voice files in the "Voice Lines" folder. "Custom Voice Lines" is specifically for this purpose.
+If you'd simply like to turn a voice line off, you can disable it in the config.
+
+Voice lines a separated into categories; Combat Dialog, Taunt - Activity, Taunt - Aggro, Taunt - Enemy, Taunt - Gargoyle Death, Taunt - General, Taunt - Player Death, and Taunt - Prior Death.
+
+Certain categories have their names hard coded into the mod. For these categories, if you want custom audio the name must match one of the originals.
+	- For example:
+		If you'd like to add a prior death taunt like "taunt_priordeath_Abandoned" then name your ogg audio file "taunt_priordeath_Abandoned". Any names that don't match won't be used.
+
+	Hard Coded Categories: Taunt - Activity, Taunt - Enemy, Taunt - Prior Death
+	
+The other categories are not name specific. Simply stick an ogg file in the corresponding folder and it will be loaded and used.
+	- For example:
+		If you'd like to add a new general taunt, then stick your ogg audio file into the "Custom Voice Lines/Taunt - General" folder.

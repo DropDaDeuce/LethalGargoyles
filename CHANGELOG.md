@@ -1,3 +1,12 @@
+## 0.2.0
+- Reworked how audio is loaded
+    - Voice Lines are now separated from the asset bundle and put into folders inside the plugins folder.
+    - Host loads audio lists when starting a game
+    - Clients will load audio from host on join
+    - Another folder is created called 'Custom Voice Lines'
+        - This can be used to replace/add voice lines. More info located in the "CustomVoiceLines.txt" file.
+- Fixed enemy warning taunts
+
 ## 0.1.0
 
 - Added soft dependancy on Coroner 

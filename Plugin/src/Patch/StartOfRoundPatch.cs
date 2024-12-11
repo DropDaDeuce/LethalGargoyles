@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using GameNetcodeStuff;
 using HarmonyLib;
 
@@ -10,8 +9,8 @@ namespace LethalGargoyles.src.Patch
     {
         public static List<(string playerName, string causeOfDeath, string source)> previousRoundDeaths = [];
 
-        [HarmonyPatch("WritePlayerNotes")]
         [HarmonyPostfix]
+        [HarmonyPatch("WritePlayerNotes")]
 #pragma warning disable IDE0051 // Remove unused private members
         static void PostFixWritePlayerNotes()
 #pragma warning restore IDE0051 // Remove unused private members
