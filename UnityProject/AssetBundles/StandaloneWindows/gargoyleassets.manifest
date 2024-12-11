@@ -1,15 +1,15 @@
 ManifestFileVersion: 0
-CRC: 3553797730
+CRC: 825880392
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: d0d3a5d448a79922e832c808a6ddd699
+    Hash: 1de15bdb1072dd023a3dc107307cd9ba
   TypeTreeHash:
     serializedVersion: 2
-    Hash: 319eb8fe57352375cbf24e1a95d066dd
+    Hash: 3415fede87c624889f4e3060e8c0f494
   IncrementalBuildHash:
     serializedVersion: 2
-    Hash: d0d3a5d448a79922e832c808a6ddd699
+    Hash: 1de15bdb1072dd023a3dc107307cd9ba
 HashAppended: 0
 ClassTypes:
 - Class: 1
@@ -38,14 +38,10 @@ ClassTypes:
   Script: {instanceID: 0}
 - Class: 82
   Script: {instanceID: 0}
-- Class: 83
-  Script: {instanceID: 0}
 - Class: 91
   Script: {instanceID: 0}
 - Class: 95
   Script: {instanceID: 0}
-- Class: 114
-  Script: {fileID: 304014653, guid: e0a89e6f23bd69e40ab1b6cd831745f1, type: 3}
 - Class: 114
   Script: {fileID: 11500000, guid: 65d3fcb39dd67306e9bb17a603308070, type: 3}
 - Class: 114
@@ -60,6 +56,8 @@ ClassTypes:
   Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
 - Class: 114
   Script: {fileID: 11500000, guid: d3cecf05b78b173605122a700874719c, type: 3}
+- Class: 114
+  Script: {fileID: 304014653, guid: e0a89e6f23bd69e40ab1b6cd831745f1, type: 3}
 - Class: 115
   Script: {instanceID: 0}
 - Class: 137
@@ -80,163 +78,22 @@ SerializeReferenceClassIdentifiers:
 - AssemblyName: Assembly-CSharp
   ClassName: NavSizeLimit
 Assets:
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerMurderStopSign.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerMurderShotgun.wav
-- Assets/ModAssets/LethalGargoyle/Materials/MapDotRed.mat
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_HoardingBug1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_YerSneeze.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyJester.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_SackOfCompost.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_OtherLightning.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_GhostGirl1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyOldBirdTorch.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerCruiserRanOver.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PitFacilityPit.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerQuicksand.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Butler1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_WaitingCenturies.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Centipede1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_OtherSpikeTrap.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Suffocation.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerMurderShovel.wav
-- Assets/ModAssets/LethalGargoyle/Bestiary/LethalGargoyleTK.asset
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_GlazedEyes.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_aggro_MakeYaMoreUgly.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Slime1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Inertia.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PitGeneric.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_aggro_GotScrapForYa.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_Bracken.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemySporeLizard.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Gravity.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyForestGiant.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Snipped.wav
-- Assets/ModAssets/LethalGargoyle/LethalGargoyleObj.prefab
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Drowning.wav
-- Assets/ModAssets/LethalGargoyle/Bestiary/LethalGargoyleTN.asset
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_NoSkill.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyBunkerSpider.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_OtherMeteor.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemySnareFlea.wav
-- Assets/ModAssets/LethalGargoyle/Models/LethalGargoyleModel.fbx
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Masked1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_CrackPot.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyTulipSnakeDrop.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_PokeYerEye.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Voice Lines/voice_hit_1.wav
 - Assets/ModAssets/LethalGargoyle/Materials/Eyes.mat
-- Assets/ModAssets/LethalGargoyle/Audio/Voice Lines/voice_attack_1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_aggro_KickYerArse.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_ToySlingshot.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Mauling.wav
 - Assets/ModAssets/LethalGargoyle/LethalGargoyle.asset
-- Assets/ModAssets/LethalGargoyle/Audio/Voice Lines/voice_hit_2.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_SlopBucket.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Nutcracker1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_BarnDoor.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_OtherItemDropship.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_StoneBlind.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Electrocution.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyHygrodere.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_YouCannaeHitMe.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PitMineElevator.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_KissMyArse.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyOldBirdRocket.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_PajamaWearing.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerCruiserExplodeBystander.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_aggro_FaceFullOfStone.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_MummyHelp.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_ExposedFace.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_TargetOnMeArse.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Fan.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerMurderKnife.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_SpringHead1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerMurderYieldSign.wav
-- Assets/ModAssets/LethalGargoyle/Materials/Material.mat
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyCircuitBees.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyManeater.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_death_TripOverMyOwnFeet.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Kicking.wav
-- Assets/ModAssets/LethalGargoyle/LethalGargoyleAnimator.controller
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerEasterEgg.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyBracken.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Spider1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerJetpackBlast.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyButlerExplode.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyThumper.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_playerdeath_YouDied.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerJetpackGravity.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerCruiserDriver.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_WorstEmployee.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Blast.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PitMinePit.wav
+- Assets/ModAssets/LethalGargoyle/Materials/MapDotRed.mat
 - Assets/ModAssets/LethalGargoyle/Materials/Body.mat
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_OtherOutOfBounds.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyEyelessDog.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_HoldShovel.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PitFacilityCatwalkJump.wav
+- Assets/ModAssets/LethalGargoyle/Bestiary/LethalGargoyleTK.asset
 - Assets/ModAssets/LethalGargoyle/Materials/Eyes_Angry.mat
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_CouldnaeHitSpring.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Stabbing.wav
-- Assets/ModAssets/LethalGargoyle/Animations/walk.001.anim
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_death_FinalWords.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyEarthLeviathan.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyMaskedPlayerWear.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_MortalHumans.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyOldBirdCharge.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Gunshots.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyCoilHead.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyNutcrackerShot.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyOldBirdStomp.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_death_AtLeastImNotYou.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_OtherLandmine.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Burning.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Thumper1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_PinkBelliedNumpty.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_OtherTurret.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Bludgeoning.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_playerdeath_YouSuck.wav
-- Assets/ModAssets/LethalGargoyle/Audio/SFX/sfx_walking.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_aggro_LookinAtMe.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Crushing.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Strangulation.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_SlowInTheHead.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyBaboonHawk.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Voice Lines/voice_attack_2.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyGhostGirl.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Abandoned.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyLGargoyle.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_DogMonkey.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyButlerStab.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Maneater1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_UglyGene.wav
 - Assets/ModAssets/LethalGargoyle/Animations/attack.anim
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_AwfulBreath.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_BodyOdour.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_SorriestExcuse.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyHoarderBug.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_OtherDepositItemsDesk.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_CouldnaeHitCastle.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Jester1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_playerdeath_EmployeeDown.wav
+- Assets/ModAssets/LethalGargoyle/Animations/walk.001.anim
+- Assets/ModAssets/LGNetworkHandler.prefab
 - Assets/ModAssets/LethalGargoyle/Materials/GargoyleSkinOld.png
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyMaskHornets.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyMaskedPlayerVictim.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyBarber.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerCruiserPassenger.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_ToughEnough.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_RubbishEmployee.wav
+- Assets/ModAssets/LethalGargoyle/Materials/Material.mat
+- Assets/ModAssets/LethalGargoyle/LethalGargoyleObj.prefab
 - Assets/ModAssets/LethalGargoyle/Animations/idle.anim
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyNutcrackerKicked.wav
+- Assets/ModAssets/LethalGargoyle/LethalGargoyleAnimator.controller
 - Assets/ModAssets/LethalGargoyle/Materials/GargoyleSkin.png
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_EnemyForestGiantEaten.wav
-- Assets/ModAssets/LethalGargoyle/Audio/SFX/sfx_running.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerStunGrenade.wav
+- Assets/ModAssets/LethalGargoyle/Bestiary/LethalGargoyleTN.asset
 - Assets/ModAssets/LethalGargoyle/Animations/die.anim
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_BlunderinGoon.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_Unknown.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_general_NoAim.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_enemy_Bracken1.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PlayerLadder.wav
-- Assets/ModAssets/LethalGargoyle/Audio/Taunts/taunt_priordeath_PitMineCave.wav
+- Assets/ModAssets/LethalGargoyle/Models/LethalGargoyleModel.fbx
 Dependencies: []

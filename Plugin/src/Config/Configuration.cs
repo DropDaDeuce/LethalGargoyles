@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Reflection;
-using BepInEx;
 using BepInEx.Configuration;
 
 namespace LethalGargoyles.src.Config
@@ -19,9 +18,13 @@ namespace LethalGargoyles.src.Config
         public ConfigEntry<int> distWarn;
         public ConfigEntry<int> bufferDist;
         public ConfigEntry<int> awareDist;
+        public Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
 
         public PluginConfig(ConfigFile cfg)
         {
+
+            AudioClipEnableConfig = [];
+
             SpawnWeight = cfg.Bind("General", //Main Catagory
                                    "Spawn weight", //SubCatagory
                                    50, //Value
@@ -72,6 +75,16 @@ namespace LethalGargoyles.src.Config
                                  60,
                                  "How far away is the gargoyle aware of other players. This will affect performance, as this setting is used to calculate pathing.");
 
+            /*foreach (AudioClip clip in ModAssets.LoadAllAssets<AudioClip>())
+            {
+                string clipName = clip.name;
+                AudioClipEnableConfig[clipName] = cfg.Bind(
+                    "Audio",
+                    $"Enable{clipName}",
+                    true,
+                    $"Enable the audio clip: {clipName}"
+                );
+            }*/
 
             ClearUnusedEntries(cfg);
         }

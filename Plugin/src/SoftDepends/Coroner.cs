@@ -35,12 +35,11 @@ namespace LethalGargoyles.src.SoftDepends
 
         internal static string? CoronerGetCauseOfDeath(PlayerControllerB player)
         {
-            string? causeOfDeathString = null;
             AdvancedCauseOfDeath? nullableCauseOfDeath = API.GetCauseOfDeath(player);
             if (nullableCauseOfDeath != null)
             {
                 AdvancedCauseOfDeath causeOfDeath = (AdvancedCauseOfDeath)nullableCauseOfDeath;
-                causeOfDeathString = Regex.Replace(causeOfDeath.GetLanguageTag(), "Death", "");
+                string? causeOfDeathString = Regex.Replace(causeOfDeath.GetLanguageTag(), "Death", "");
                 return causeOfDeathString;
             }
             else return null;
