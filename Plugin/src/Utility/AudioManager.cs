@@ -10,6 +10,8 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.Threading.Tasks;
 using System.Threading;
+using HarmonyLib;
+using System.Linq;
 
 namespace LethalGargoyles.src.Utility;
 public class AudioManager : NetworkBehaviour
@@ -23,6 +25,7 @@ public class AudioManager : NetworkBehaviour
     public static List<AudioClip> activityClips = [];
     public static List<AudioClip> attackClips = [];
     public static List<AudioClip> hitClips = [];
+    public static List<AudioClip> classClips = [];
     public static AudioManager? Instance;
 
     public static Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
@@ -77,6 +80,7 @@ public class AudioManager : NetworkBehaviour
         activityClips.Clear();
         attackClips.Clear();
         hitClips.Clear();
+        classClips.Clear();
 
         if (IsServer)
         {
@@ -96,8 +100,9 @@ public class AudioManager : NetworkBehaviour
         LogIfDebugBuild("Loaded gargoyle gargoyle death taunt clips count: " + deathClips.Count);
         LogIfDebugBuild("Loaded gargoyle prior death taunt clips count: " + priorDeathClips.Count);
         LogIfDebugBuild("Loaded gargoyle activity taunt clips count: " + activityClips.Count);
+        LogIfDebugBuild("Loaded gargoyle class taunt clips count: " + classClips.Count);
         LogIfDebugBuild("Loaded gargoyle voice attack clips count: " + attackClips.Count);
-        LogIfDebugBuild("Loaded gargoyle voice hit taunt clips count: " + hitClips.Count);
+        LogIfDebugBuild("Loaded gargoyle voice hit clips count: " + hitClips.Count);
     }
 
     private void OnClientConnectedCallback(ulong clientId)
@@ -131,7 +136,7 @@ public class AudioManager : NetworkBehaviour
         {
             while (!isPlayerFullyLoaded || !clientReady.ContainsKey(clientId))
             {
-                Plugin.Logger.LogInfo($"Client: {clientId}, is still loading.");
+                LogIfDebugBuild($"Client: {clientId}, is still loading.");
                 for (int i = 0; i < fullyLoadedPlayers.Count; i++)
                 {
                     if (fullyLoadedPlayers[i] == clientId)
@@ -242,10 +247,10 @@ public class AudioManager : NetworkBehaviour
     private async Task SendAudioClipToClient(ulong clientId, byte[] audioData, string clipName, string category)
     {
         int totalBufferSize = audioData.Length + 200;
-        Plugin.Logger.LogInfo($"Initializing the writer with length of: {totalBufferSize}");
+        LogIfDebugBuild($"Initializing the writer with length of: {totalBufferSize}");
         using FastBufferWriter writer = new(totalBufferSize, Allocator.Temp);
 
-        Plugin.Logger.LogInfo("writer initialized");
+        LogIfDebugBuild("writer initialized");
 
         // Include fragment index and total fragment count
         writer.WriteValueSafe(category);
@@ -369,7 +374,7 @@ public class AudioManager : NetworkBehaviour
     }
 
     // Helper method to get the clip list based on category name
-    private List<AudioClip> GetClipListByCategory(string category)
+    public static List<AudioClip> GetClipListByCategory(string category)
     {
         return category switch
         {
@@ -380,6 +385,7 @@ public class AudioManager : NetworkBehaviour
             "GargoyleDeath" => deathClips,
             "PriorDeath" => priorDeathClips,
             "Activity" => activityClips,
+            "Class" => classClips,
             "Attack" => attackClips,
             "Hit" => hitClips,
             _ => throw new ArgumentException($"Invalid audio clip category: {category}"),// Or throw an exception
@@ -391,15 +397,20 @@ public class AudioManager : NetworkBehaviour
         // Use a dictionary to store the config entries for audio clips
         AudioClipFilePaths = new Dictionary<string, List<string>>
             {
-                { "General", new List<string>() },
-                { "Aggro", new List<string>() },
-                { "Enemy", new List<string>() },
-                { "PlayerDeath", new List<string>() },
-                { "GargoyleDeath", new List<string>() },
-                { "PriorDeath", new List<string>() },
-                { "Attack", new List<string>() },
-                { "Hit", new List<string>() }
+                { "General", [] },
+                { "Aggro", [] },
+                { "Enemy", [] },
+                { "PlayerDeath", [] },
+                { "GargoyleDeath", [] },
+                { "PriorDeath", [] },
+                { "Attack", [] },
+                { "Hit", [] }
             };
+
+        if (Plugin.Instance.IsEmployeeClassesLoaded)
+        {
+            AudioClipFilePaths.Add("Class", []);
+        }
 
         foreach (var cat in AudioClipFilePaths)
         {
@@ -409,6 +420,16 @@ public class AudioManager : NetworkBehaviour
             // Get files from both folders
             FileInfo[] defaultFiles = GetMP3Files(category, "Voice Lines");
             FileInfo[] customFiles = GetMP3Files(category, "Custom Voice Lines");
+
+            if (category == "PriorDeath" && Plugin.Instance.IsCoronerLoaded)
+            {
+                FileInfo[] coronerDefaultFiles = GetMP3Files("Coroner", "Voice Lines");
+                FileInfo[] coronerCustomFiles = GetMP3Files("Coroner", "Custom Voice Lines");
+
+                // Add Coroner files to the existing arrays
+                defaultFiles = [.. defaultFiles, .. coronerDefaultFiles];
+                customFiles = [.. customFiles, .. coronerCustomFiles];
+            }
 
             // Add default files first
             foreach (FileInfo file in defaultFiles)
@@ -497,6 +518,12 @@ public class AudioManager : NetworkBehaviour
                 return directoryInfo.GetFiles("*.*");
             case "PriorDeath":
                 directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Prior Death"));
+                return directoryInfo.GetFiles("*.*");
+            case "Coroner":
+                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Prior Death", "Coroner"));
+                return directoryInfo.GetFiles("*.*");
+            case "Class":
+                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - EmployeeClass"));
                 return directoryInfo.GetFiles("*.*");
             case "Activity":
                 //directoryInfo = new DirectoryInfo(Path.Combine(Path.GetDirectoryName(folderLoc), folderName, "Taunt - Activity"));

@@ -3,8 +3,11 @@ using System.Diagnostics;
 using System.Linq;
 using GameNetcodeStuff;
 using LethalGargoyles.src.Patch;
+using LethalGargoyles.src.Utility;
 using Unity.Netcode;
 using UnityEngine;
+using EmployeeClasses;
+using LethalGargoyles.src.SoftDepends;
 
 namespace LethalGargoyles.src.Enemy
 {
@@ -26,9 +29,11 @@ namespace LethalGargoyles.src.Enemy
 
         private float randGenTauntTime = 0f;
         private float randAgrTauntTime = 0f;
+        private float randEnemyTauntTime = 0f;
 
         private float lastGenTauntTime = 0f;
         private float lastAgrTauntTime = 0f;
+        private float lastEnemyTauntTime = 0f;
 
         private int lastGenTaunt = -1;
         private int lastAgrTaunt = -1;
@@ -41,6 +46,9 @@ namespace LethalGargoyles.src.Enemy
         private Vector3 curPosition = Vector3.zero;
         private string? lastEnemy = null;
         private bool isAllPlayersDead = false;
+
+        private bool isSeen;
+        private bool canSeePlayer;
 
         public AISearchRoutine? searchForPlayers;
 
@@ -106,7 +114,7 @@ namespace LethalGargoyles.src.Enemy
             distanceToClosestPlayer = closestPlayer != null ? Vector3.Distance(transform.position, closestPlayer.transform.position) : 0f;
             // LogIfDebugBuild("ClosestPlayer: " + distanceToPlayer);
             // LogIfDebugBuild("Aware: " + awareDist);
-            bool canSeePlayer = false;
+
 
             if (targetPlayer != null)
             {
@@ -117,7 +125,6 @@ namespace LethalGargoyles.src.Enemy
                 canSeePlayer = CanSeePlayer(targetPlayer);
             }
 
-            bool isSeen = false;
             if (distanceToClosestPlayer <= awareDist)
             {
                 isSeen = GargoyleIsSeen(transform);
@@ -142,6 +149,10 @@ namespace LethalGargoyles.src.Enemy
                         SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
                     }
                 }
+                else if (targetPlayer == null && currentBehaviourStateIndex != (int)State.AggressivePursuit)
+                {
+                    SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
+                }
             }
             else if (!isSeen && distanceToPlayer <= idleDistance && currentBehaviourStateIndex != (int)State.AggressivePursuit && currentBehaviourStateIndex != (int)State.SearchingForPlayer)
             {
@@ -161,7 +172,6 @@ namespace LethalGargoyles.src.Enemy
                         if (!targetPlayer.isInsideFactory)
                         {
                             // LogIfDebugBuild("Target Player Left The Facility. Switching Targets");
-                            StartSearch(transform.position);
                             lastGenTauntTime = 0f;
                             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                             return;
@@ -179,6 +189,7 @@ namespace LethalGargoyles.src.Enemy
                 case (int)State.SearchingForPlayer:
                     agent.speed = baseSpeed * 1.5f;
                     // LogIfDebugBuild("Searching For Closest Player");
+                    StartSearch(transform.position);
                     SearchForPlayers();
                     if (FoundClosestPlayerInRange())
                     {
@@ -195,10 +206,8 @@ namespace LethalGargoyles.src.Enemy
                         if (!targetPlayer.isInsideFactory)
                         {
                             LogIfDebugBuild("Target Player Left The Facility. Switching Targets");
-                            StartSearch(transform.position);
                             lastGenTauntTime = 0f;
                             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
-                            SearchForPlayers();
                             return;
                         }
                         creatureSFX.volume = 0.5f;
@@ -228,7 +237,6 @@ namespace LethalGargoyles.src.Enemy
                         if (!targetPlayer.isInsideFactory)
                         {
                             LogIfDebugBuild("Target Player Left The Facility. Switching Targets");
-                            StartSearch(transform.position);
                             lastAgrTauntTime = 0f;
                             SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                             return;
@@ -291,7 +299,7 @@ namespace LethalGargoyles.src.Enemy
                             }
                         }
 
-                        if (Time.time - lastGenTauntTime >= randGenTauntTime && IsHost)
+                        if (Time.time - lastGenTauntTime >= randGenTauntTime)
                         {
                             Taunt();
                         }
@@ -309,6 +317,9 @@ namespace LethalGargoyles.src.Enemy
                         {
                             SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
                         }
+                    } else if (!isSeen)
+                    {
+                        SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                     }
                     break;
 
@@ -319,7 +330,10 @@ namespace LethalGargoyles.src.Enemy
 
             if ((currentBehaviourStateIndex == (int)State.StealthyPursuit || currentBehaviourStateIndex == (int)State.Idle))
             {
-                EnemyTaunt();
+                if (Time.time - lastEnemyTauntTime >= randEnemyTauntTime)
+                {
+                    EnemyTaunt();
+                }
             }
         }
 
@@ -701,6 +715,7 @@ namespace LethalGargoyles.src.Enemy
         {
             string? playerName = null;
             string? priorCauseOfDeath = null;
+            string? playerClass = null;
             int randSource = Random.Range(1, 4);
 
             List<(string playerName, string causeOfDeath, string source)> priorDeathCauses = [];
@@ -731,6 +746,18 @@ namespace LethalGargoyles.src.Enemy
                         LogIfDebugBuild($"{playerName}'s cause of death last round was {priorCauseOfDeath}");
                     }
                 }
+
+                foreach (PlayerControllerB player in StartOfRound.Instance.allPlayerScripts)
+                {
+                    if (targetPlayer.playerSteamId == player.playerSteamId)
+                    {
+                        if (Plugin.Instance.IsEmployeeClassesLoaded)
+                        {
+                            playerClass = EmployeeClassesClass.GetPlayerClass(player);
+                        }
+                        break;
+                    }
+                }
             }
 
             int randInt = Random.Range(1, 200);
@@ -739,14 +766,22 @@ namespace LethalGargoyles.src.Enemy
             {
                 OtherTaunt("enemy", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
             }
-            else if (randInt < 180 || playerName == null)
+            else if (randInt < 175 || playerName == null)
             {
                 OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
             } 
-            else if(playerName != null && priorCauseOfDeath != null && !GargoyleIsTalking())
+            else if(randInt < 195 && playerName != null && priorCauseOfDeath != null && !GargoyleIsTalking())
             {
-                TauntClientRpc("taunt_priordeath_" + priorCauseOfDeath, "priordeath");
+                string? randClip = ChooseRandomClip("taunt_priordeath_" + priorCauseOfDeath, "PriorDeath");
+                if (randClip == null) { Plugin.Logger.LogError($"Clip missing for {priorCauseOfDeath} death."); return; }
+                TauntClientRpc(randClip, "priordeath");
             } 
+            else if (playerClass != null)
+            {
+                string? randClip = ChooseRandomClip("taunt_employeeclass_" + playerClass, "Class");
+                if (randClip == null) { Plugin.Logger.LogError($"Clip missing for {playerClass} class."); return; }
+                TauntClientRpc(randClip, "class");
+            }
             else
             {
                 OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
@@ -802,72 +837,70 @@ namespace LethalGargoyles.src.Enemy
         }
 
         public void EnemyTaunt()
-        {
-            int randInt = Random.Range(1, 100);
-            string? clip = null;
-
-            EnemyAI? enemy;
-
-            if (randInt < 3)
+        {           
+            if (!GargoyleIsTalking())
             {
-                if (!GargoyleIsTalking())
-                {
-                    enemy = EnemyNearGargoyle();
+                EnemyAI? enemy = EnemyNearGargoyle();
 
-                    if (enemy != null)
+                if (enemy != null)
+                {
+                    if (enemy.enemyType.enemyName != lastEnemy)
                     {
-                        if (enemy.enemyType.enemyName != lastEnemy)
                         {
-                            lastEnemy = enemy.enemyType.enemyName;
+                            string? clip = null;
+                            switch (enemy.enemyType.enemyName.ToUpper())
+                            {
+                                case "BLOB":
+                                    clip = "taunt_enemy_Slime";
+                                    break;
+                                case "BUTLER":
+                                    clip = "taunt_enemy_Butler";
+                                    break;
+                                case "CENTIPEDE":
+                                    clip = "taunt_enemy_Centipede";
+                                    break;
+                                case "GIRL":
+                                    clip = "taunt_enemy_GhostGirl";
+                                    break;
+                                case "HOARDINGBUG":
+                                    clip = "taunt_enemy_HoardingBug";
+                                    break;
+                                case "JESTER":
+                                    clip = "taunt_enemy_Jester";
+                                    break;
+                                case "MANEATER":
+                                    clip = "taunt_enemy_Maneater";
+                                    break;
+                                case "MASKED":
+                                    clip = "taunt_enemy_Masked";
+                                    break;
+                                case "CRAWLER":
+                                    clip = "taunt_enemy_Thumper";
+                                    break;
+                                case "BUNKERSPIDER":
+                                    clip = "taunt_enemy_Spider";
+                                    break;
+                                case "SPRING":
+                                    clip = "taunt_enemy_SpringHead";
+                                    break;
+                                case "NUTCRACKER":
+                                    clip = "taunt_enemy_Nutcracker";
+                                    break;
+                                case "FLOWERMAN":
+                                    clip = "taunt_enemy_Bracken";
+                                    break;
+                            }
+
+                            int randInt = Random.Range(1, 100);
+                            if (clip != null && randInt < 3)
                             {
                                 LogIfDebugBuild(enemy.enemyType.enemyName);
-                                switch (enemy.enemyType.enemyName.ToUpper())
-                                {
-                                    case "BLOB":
-                                        clip = "taunt_enemy_Slime";
-                                        break;
-                                    case "BUTLER":
-                                        clip = "taunt_enemy_Butler";
-                                        break;
-                                    case "CENTIPEDE":
-                                        clip = "taunt_enemy_Centipede";
-                                        break;
-                                    case "GIRL":
-                                        clip = "taunt_enemy_GhostGirl";
-                                        break;
-                                    case "HOARDINGBUG":
-                                        clip = "taunt_enemy_HoardingBug";
-                                        break;
-                                    case "JESTER":
-                                        clip = "taunt_enemy_Jester";
-                                        break;
-                                    case "MANEATER":
-                                        clip = "taunt_enemy_Maneater";
-                                        break;
-                                    case "MASKED":
-                                        clip = "taunt_enemy_Masked";
-                                        break;
-                                    case "CRAWLER":
-                                        clip = "taunt_enemy_Thumper";
-                                        break;
-                                    case "BUNKERSPIDER":
-                                        clip = "taunt_enemy_Spider";
-                                        break;
-                                    case "SPRING":
-                                        clip = "taunt_enemy_SpringHead";
-                                        break;
-                                    case "NUTCRACKER":
-                                        clip = "taunt_enemy_Nutcracker";
-                                        break;
-                                    case "FLOWERMAN":
-                                        clip = "taunt_enemy_Bracken";
-                                        break;
-                                }
-
-                                if (clip != null)
-                                {
-                                    TauntClientRpc(clip, "enemy");
-                                }
+                                lastEnemy = enemy.enemyType.enemyName;
+                                string? randomClip = ChooseRandomClip(clip, "Enemy");
+                                if (randomClip == null ) { return; }
+                                TauntClientRpc(randomClip, "enemy");
+                                lastEnemyTauntTime = Time.time;
+                                randEnemyTauntTime = Random.Range((int)(minTaunt), (int)(maxTaunt));
                             }
                         }
                     }
@@ -885,6 +918,25 @@ namespace LethalGargoyles.src.Enemy
                 }
             }
             return null;
+        }
+
+        string? ChooseRandomClip(string clipName, string listName)
+        {
+            List<AudioClip> tempList = [];
+            List<AudioClip> clipList = AudioManager.GetClipListByCategory(listName);
+
+            foreach (AudioClip clip in clipList)
+            {
+                if (clip.name.StartsWith(clipName))
+                {
+                    tempList.Add(clip);
+                }
+            }
+
+            if (tempList.Count < 0) { return null; }
+
+            int intRand = Random.Range(0, tempList.Count);
+            return tempList[intRand].name;
         }
 
         public bool GargoyleIsTalking()
@@ -917,29 +969,23 @@ namespace LethalGargoyles.src.Enemy
             switch (clipType)
             {
                 case "general":
-                    clipList = Utility.AudioManager.tauntClips;
-                    break;
+                    clipList = Utility.AudioManager.tauntClips; break;
                 case "enemy":
-                    clipList = Utility.AudioManager.enemyClips;
-                    break;
+                    clipList = Utility.AudioManager.enemyClips; break;
                 case "aggro":
-                    clipList = Utility.AudioManager.aggroClips;
-                    break;
+                    clipList = Utility.AudioManager.aggroClips; break;
                 case "death":
-                    clipList = Utility.AudioManager.deathClips;
-                    break;
+                    clipList = Utility.AudioManager.deathClips; break;
                 case "attack":
-                    clipList = Utility.AudioManager.attackClips;
-                    break;
+                    clipList = Utility.AudioManager.attackClips; break;
                 case "hit":
-                    clipList = Utility.AudioManager.hitClips;
-                    break;
+                    clipList = Utility.AudioManager.hitClips; break;
                 case "priordeath":
-                    clipList = Utility.AudioManager.priorDeathClips;
-                    break;
+                    clipList = Utility.AudioManager.priorDeathClips; break;
                 case "playerdeath":
-                    clipList = Utility.AudioManager.playerDeathClips;
-                    break;
+                    clipList = Utility.AudioManager.playerDeathClips; break;
+                case "class":
+                    clipList = Utility.AudioManager.classClips; break;
             }
 
             AudioClip? clip = FindClip(clipName, clipList);

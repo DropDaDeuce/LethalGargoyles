@@ -15,6 +15,7 @@ namespace LethalGargoyles.src
     [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
     [BepInDependency(LethalLib.Plugin.ModGUID)]
     [BepInDependency("com.elitemastereric.coroner", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("Jade.EmployeeClasses", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         internal static new ManualLogSource Logger = null!;
@@ -22,6 +23,7 @@ namespace LethalGargoyles.src
         internal static readonly Harmony harmony = new(MyPluginInfo.PLUGIN_GUID);
         internal static PluginConfig BoundConfig { get; private set; } = null!;
         public bool IsCoronerLoaded { get; private set; }
+        public bool IsEmployeeClassesLoaded { get; private set; }
         public static AssetBundle? ModAssets;
         public static string? CustomAudioFolderPath { get; private set; }
 
@@ -72,7 +74,8 @@ namespace LethalGargoyles.src
             Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - Gargoyle Death"));
             Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - General"));
             Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - Player Death"));
-            Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - Prior Death"));
+            Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - Prior Death", "Coroner"));
+            Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - EmployeeClass"));
 
             var LethalGargoyle = ModAssets.LoadAsset<EnemyType>("LethalGargoyle");
             var LethalGargoyleTN = ModAssets.LoadAsset<TerminalNode>("LethalGargoyleTN");
@@ -83,7 +86,9 @@ namespace LethalGargoyles.src
             harmony.PatchAll();
             
             IsCoronerLoaded = DepIsLoaded("com.elitemastereric.coroner");
+            IsEmployeeClassesLoaded = DepIsLoaded("Jade.EmployeeClasses");
             Logger.LogInfo($"Coroner Is Loaded? " + IsCoronerLoaded);
+            Logger.LogInfo($"EmployeeClasses Is Loaded? " + IsEmployeeClassesLoaded);
 
             if (IsCoronerLoaded)
             {
