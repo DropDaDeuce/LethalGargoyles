@@ -44,10 +44,10 @@ namespace LethalGargoyles.src.SoftDepends
                                 if (playerClass == null)
                                 {
                                     LogIfDebugBuild("Players class is null");
+                                    return null;
                                 }
                                 else
                                 {
-                                    LogIfDebugBuild($"Players class is {playerClass}");
                                     return playerClass;
                                 }
                             }

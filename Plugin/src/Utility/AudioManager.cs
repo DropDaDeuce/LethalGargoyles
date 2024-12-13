@@ -10,8 +10,6 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.Threading.Tasks;
 using System.Threading;
-using HarmonyLib;
-using System.Linq;
 
 namespace LethalGargoyles.src.Utility;
 public class AudioManager : NetworkBehaviour
@@ -53,7 +51,7 @@ public class AudioManager : NetworkBehaviour
         }
         else
         {
-            Plugin.Logger.LogInfo($"{NetworkManager.Singleton.LocalClientId}");
+            Plugin.Logger.LogInfo($"Connected to host with ID: {NetworkManager.Singleton.LocalClientId}");
         }
 
         if (IsHost)
