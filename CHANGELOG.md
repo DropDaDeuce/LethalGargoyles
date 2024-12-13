@@ -11,6 +11,9 @@
     - Implemented logic to randomly select from multiple audio clips with the same base name for Enemy, PriorDeath and Class taunts.
 - **Coroner Taunts:**
     - Moved Coroner PriorDeath taunts into a subfolder to prevent loading if the Coroner mod is not installed.
+- **Guaranteed Taunt Variation:**
+    - Added logic to ensure the gargoyle will perform a taunt from a different category (Enemy, PriorDeath, or EmployeeClasses) after a set number of consecutive general taunts.
+    - The number of consecutive general taunts allowed is dynamically determined based on installed mods and player states.
 
 **Changes:**
 
@@ -18,6 +21,12 @@
     - Optimized audio clip loading by adjusting the timing of the `WaitForClientReady` call.
 - **File Structure:**
     - Reorganized the file structure in the source directory.
+- **Gargoyle AI:**
+    - Optimized gargoyle AI for improved performance and behavior.
+    - Optimized animation and state transitions for smoother movement.
+    - Added the ability for the gargoyle to target players even when outside.
+    - Introduced the ability for the gargoyle to close doors behind it.
+    - Updated acceleration, stopping distance, auto braking, and angular speed to improve target following during chases.
 
 **Bug Fixes:**
 
@@ -46,6 +55,11 @@
     - `System.Buffers`
     - `System.Numeric.Vectors`
     - `System.Runtime.CompilerServices.Unsafe`
+
+**Documentation:**
+
+- Updated the README and CHANGELOG with the latest changes and improvements.
+- Reformatted the changelog to display the latest version at the top.
 
 ## v0.1.0 
 

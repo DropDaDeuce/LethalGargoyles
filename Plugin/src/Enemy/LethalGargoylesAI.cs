@@ -72,6 +72,8 @@ namespace LethalGargoyles.src.Enemy
         private int lastGenTaunt = -1;
         private int lastAgrTaunt = -1;
 
+        private int genTauntCount;
+
         private float lastAttackTime;
         private float distanceToPlayer = 0f;
         private float distanceToClosestPlayer = 0f;
@@ -327,33 +329,27 @@ namespace LethalGargoyles.src.Enemy
                 case (int)State.SearchingForPlayer:
                     if (!moveTowardsDestination)
                     {
-                        LogIfDebugBuild($"startIdle in state {currentBehaviourStateIndex}");
                         DoAnimationClientRpc("startIdle");
                     }
                     else if (moveTowardsDestination)
                     {
-                        LogIfDebugBuild($"startWalk in state {currentBehaviourStateIndex}");
                         DoAnimationClientRpc("startWalk");
                     }
                     break;
                 case (int)State.Idle:
-                    LogIfDebugBuild($"startIdle in state {currentBehaviourStateIndex}");
                     DoAnimationClientRpc("startIdle");
                     break;
                 case (int)State.AggressivePursuit:
                     if (!moveTowardsDestination)
                     {
-                        LogIfDebugBuild($"startIdle in state {currentBehaviourStateIndex}");
                         DoAnimationClientRpc("startIdle");
                     }
                     else if (moveTowardsDestination)
                     {
-                        LogIfDebugBuild($"startChase in state {currentBehaviourStateIndex}");
                         DoAnimationClientRpc("startChase");
                     }
                     break;
                 case (int)State.GetOutOfSight:
-                    LogIfDebugBuild($"startWalk in state {currentBehaviourStateIndex}");
                     DoAnimationClientRpc("startWalk");
                     break;
                 default:
@@ -689,7 +685,6 @@ namespace LethalGargoyles.src.Enemy
 
         public void Taunt()
         {
-            string? playerName = null;
             string? priorCauseOfDeath = null;
             string? playerClass = null;
             int randSource = UnityEngine.Random.Range(1, 4);
@@ -709,12 +704,13 @@ namespace LethalGargoyles.src.Enemy
 
                 for (int i = 0; i < priorDeathCauses.Count(); i++)
                 {
+                    string? playerName;
                     if ((randSource == 1 && priorDeathCauses[i].source == "Vanilla") || !Plugin.Instance.IsCoronerLoaded)
                     {
                         playerName = priorDeathCauses[i].playerName;
                         priorCauseOfDeath = priorDeathCauses[i].causeOfDeath;
                         LogIfDebugBuild($"{playerName}'s cause of death last round was {priorCauseOfDeath}");
-                    } 
+                    }
                     else if (randSource != 1 && priorDeathCauses[i].source == "Coroner" && Plugin.Instance.IsCoronerLoaded)
                     {
                         playerName = priorDeathCauses[i].playerName;
@@ -736,33 +732,50 @@ namespace LethalGargoyles.src.Enemy
                 }
             }
 
-            int randInt = UnityEngine.Random.Range(1, 200);
-
-            LogIfDebugBuild($"Random Taunt Number is {randInt}");
-
-            if (randInt < 3)
+            int randInt;
+            if (genTauntCount >= 10 && playerClass != null && priorCauseOfDeath != null)
             {
-                OtherTaunt("enemy", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
+                randInt = UnityEngine.Random.Range(165, 200);
             }
-            else if (randInt < 175 || playerName == null)
+            else if (genTauntCount >= 15 && (playerClass != null || priorCauseOfDeath != null))
+            {
+                randInt = UnityEngine.Random.Range(165, 200);
+            }
+            else
+            {
+                randInt = UnityEngine.Random.Range(1, 200);
+            }
+
+            LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
+
+            if (randInt < 175)
             {
                 OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
-            } 
-            else if(randInt < 188 && playerName != null && priorCauseOfDeath != null && !GargoyleIsTalking())
+                genTauntCount++;
+            }
+            else if (randInt < 180)
+            {
+                OtherTaunt("enemy", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
+                genTauntCount = 0;
+            }
+            else if(randInt < 190 && priorCauseOfDeath != null && !GargoyleIsTalking())
             {
                 string? randClip = ChooseRandomClip("taunt_priordeath_" + priorCauseOfDeath, "PriorDeath");
                 if (randClip == null) { Plugin.Logger.LogError($"Clip missing for {priorCauseOfDeath} death."); return; }
                 TauntClientRpc(randClip, "priordeath");
+                genTauntCount = 0;
             } 
-            else if (playerClass != null)
+            else if (playerClass != null && !GargoyleIsTalking())
             {
                 string? randClip = ChooseRandomClip("taunt_employeeclass_" + playerClass, "Class");
                 if (randClip == null) { Plugin.Logger.LogError($"Clip missing for {playerClass} class."); return; }
                 TauntClientRpc(randClip, "class");
+                genTauntCount = 0;
             }
-            else
+            else if (!GargoyleIsTalking())
             {
                 OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
+                genTauntCount++;
             }
         }
 
@@ -797,6 +810,7 @@ namespace LethalGargoyles.src.Enemy
                         randomIndex = UnityEngine.Random.Range(0, clipList.Count());
                     } while (randomIndex == lastTaunt);
 
+                    lastTaunt = randomIndex;
                     TauntClientRpc(clipList[randomIndex].name, clipType);
                     lastTauntTime = Time.time;
                     randTime = UnityEngine.Random.Range(minTaunt, maxTaunt);
