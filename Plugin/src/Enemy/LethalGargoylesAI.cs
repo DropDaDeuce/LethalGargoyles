@@ -6,26 +6,60 @@ using LethalGargoyles.src.Patch;
 using LethalGargoyles.src.Utility;
 using Unity.Netcode;
 using UnityEngine;
-using EmployeeClasses;
 using LethalGargoyles.src.SoftDepends;
+using HarmonyLib;
+using System.Reflection;
 
 namespace LethalGargoyles.src.Enemy
 {
-    // You may be wondering, how does the Gargoyle know it is from class LethalGargoyleAI?
-    // Well, we give it a reference to to this class in the Unity project where we make the asset bundle.
-    // Asset bundles cannot contain scripts, so our script lives here. It is important to get the
-    // reference right, or else it will not find this file. See the guide for more information.
+    [HarmonyPatch(typeof(DoorLock), "OnTriggerStay")]
+    public class HarmonyDoorPatch
+    {
+        [HarmonyPostfix]
+        static void PostFixOnTriggerStay(DoorLock __instance, Collider other)
+        {
+            if (other == null) {return; }
+            if (other.GetComponent<EnemyAICollisionDetect>() == null) { return; }
+            if (other.GetComponent<EnemyAICollisionDetect>().mainScript == null) { return; }
+
+            if (other.GetComponent<EnemyAICollisionDetect>().mainScript is LethalGargoylesAI gargoyles)
+            {
+                // Get the enemyDoorMeter field using reflection
+                FieldInfo enemyDoorMeterField = typeof(DoorLock).GetField("enemyDoorMeter", BindingFlags.NonPublic | BindingFlags.Instance);
+
+                if (enemyDoorMeterField != null)
+                {
+                    // Get the value of the enemyDoorMeter field
+                    float enemyDoorMeter = (float)enemyDoorMeterField.GetValue(__instance);
+                    if (enemyDoorMeter <= 0f)
+                    {
+                        if (!gargoyles.openedDoors.ContainsKey(__instance))
+                        {
+                            gargoyles.openedDoors.Add(__instance, Time.time);
+                        }
+                    }
+                }
+                else
+                {
+                    // Handle the case where the field is not found
+                    Plugin.Logger.LogWarning("enemyDoorMeter field not found in DoorLock.");
+                }
+            }
+        }
+    }
 
     public class LethalGargoylesAI : EnemyAI
     {
-        // We set these in our Asset Bundle, so we can disable warning CS0649:
-        // Field 'field' is never assigned to, and will always have its default value 'value'
 #pragma warning disable 0649
         public Transform turnCompass = null!;
         public Transform attackArea = null!;
 #pragma warning restore 0649
 
+        public static LethalGargoylesAI? LGInstance { get; private set; }
+        public readonly Dictionary<DoorLock, float> openedDoors = [];
+
         PlayerControllerB closestPlayer = null!;
+        PlayerControllerB aggroPlayer = null!;
 
         private float randGenTauntTime = 0f;
         private float randAgrTauntTime = 0f;
@@ -42,11 +76,8 @@ namespace LethalGargoyles.src.Enemy
         private float distanceToPlayer = 0f;
         private float distanceToClosestPlayer = 0f;
         private float idleDistance = 0f;
-        private Vector3 lastPosition = Vector3.zero;
-        private Vector3 curPosition = Vector3.zero;
         private string? lastEnemy = null;
         private bool isAllPlayersDead = false;
-
         private bool isSeen;
         private bool canSeePlayer;
 
@@ -80,6 +111,7 @@ namespace LethalGargoyles.src.Enemy
         public override void Start()
         {
             base.Start();
+            LGInstance = this;
             LogIfDebugBuild("Gargoyle Spawned");
             DoAnimationClientRpc("startWalk");
 
@@ -104,60 +136,82 @@ namespace LethalGargoyles.src.Enemy
         public override void Update()
         {
             base.Update();
+            isAllPlayersDead = StartOfRound.Instance.allPlayersDead;
             if (isEnemyDead || isAllPlayersDead) return;
 
-            isAllPlayersDead = StartOfRound.Instance.allPlayersDead;
+            if (targetPlayer == null)
+            {
+                FoundClosestPlayerInRange();
+            }
+
+            if (LGInstance != null)
+            {
+                List<DoorLock> doorsToRemove = [];
+
+                foreach (DoorLock door in openedDoors.Keys)
+                {
+                    if (openedDoors.TryGetValue(door, out float openTime) && Time.time - openTime >= 0.75f)
+                    {
+                        float doorDist = Vector3.Distance(door.transform.position, transform.position);
+
+                        if (doorDist > 4f || (doorDist > 2.5f && currentBehaviourStateIndex == (int)State.Idle))
+                        {
+                            door.gameObject.GetComponent<AnimatedObjectTrigger>().TriggerAnimationNonPlayer(LGInstance.useSecondaryAudiosOnAnimatedObjects, overrideBool: true);
+                            door.CloseDoorNonPlayerServerRpc();
+                            doorsToRemove.Add(door);
+                            //if (previousAnimation != null) { DoAnimationClientRpc(previousAnimation); }
+                        }
+                    }
+                }
+
+                foreach (DoorLock door in doorsToRemove)
+                {
+                    openedDoors.Remove(door);
+                }
+            }
 
             closestPlayer = GetClosestPlayer();
             distanceToPlayer = targetPlayer != null ? Vector3.Distance(transform.position, targetPlayer.transform.position) : 0f;
-            // LogIfDebugBuild("TargetPlayer: " + distanceToPlayer);
             distanceToClosestPlayer = closestPlayer != null ? Vector3.Distance(transform.position, closestPlayer.transform.position) : 0f;
-            // LogIfDebugBuild("ClosestPlayer: " + distanceToPlayer);
-            // LogIfDebugBuild("Aware: " + awareDist);
-
-
-            if (targetPlayer != null)
-            {
-                if (!isOutside && !targetPlayer.isInsideFactory)
-                {
-                    SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
-                }
-                canSeePlayer = CanSeePlayer(targetPlayer);
-            }
 
             if (distanceToClosestPlayer <= awareDist)
             {
                 isSeen = GargoyleIsSeen(transform);
-                if (isSeen && currentBehaviourStateIndex != (int)State.AggressivePursuit)
+
+                if (distanceToClosestPlayer > aggroRange)
                 {
-                    if (targetPlayer != null)
+                    randAgrTauntTime = Time.time - lastAgrTauntTime;
+                }
+
+                // Priority #3: Aggressive if seen within aggro range
+                if (distanceToClosestPlayer <= aggroRange && isSeen)
+                {
+                    SwitchToBehaviourClientRpc((int)State.AggressivePursuit);
+                }
+                else if (distanceToClosestPlayer > aggroRange)
+                {
+                    if (isSeen) // Seen but outside aggro range
                     {
-                        if (distanceToPlayer <= aggroRange)
-                        {
-                            // LogIfDebugBuild("Is Seen. Switching to aggression");
-                            SwitchToBehaviourClientRpc((int)State.AggressivePursuit);
-                        }
-                        else
-                        {
-                            //LogIfDebugBuild("Is Seen and Not Aggressive");
-                            SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
-                        }
-                    }
-                    else
-                    {
-                        //LogIfDebugBuild("Is Seen and Not Aggressive");
                         SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
                     }
-                }
-                else if (targetPlayer == null && currentBehaviourStateIndex != (int)State.AggressivePursuit)
-                {
-                    SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
+                    else if (distanceToPlayer <= idleDistance && targetPlayer != null) // Priority #2: Idle if within idle range
+                    {
+                        SwitchToBehaviourClientRpc((int)State.Idle);
+                    }
+                    else if (targetPlayer != null) // Priority #2: Follow if outside idle range
+                    {
+                        SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
+                    }
+                    else if (currentBehaviourStateIndex != (int)State.SearchingForPlayer)
+                    {
+                        SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
+                    }
                 }
             }
-            else if (!isSeen && distanceToPlayer <= idleDistance && currentBehaviourStateIndex != (int)State.AggressivePursuit && currentBehaviourStateIndex != (int)State.SearchingForPlayer)
+            else // No players within awareness range, including targetPlayer
             {
-                LogIfDebugBuild("Not Seen. Switching to idle.");
-                SwitchToBehaviourClientRpc((int)State.Idle);
+                SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
+                targetPlayer = null; // Clear targetPlayer
             }
 
             bool foundSpot;
@@ -165,184 +219,102 @@ namespace LethalGargoyles.src.Enemy
             {
                 case (int)State.Idle:
                     agent.speed = 0f;
+                    creatureSFX.volume = 0f;
+                    agent.autoBraking = true;
                     if (targetPlayer != null)
                     {
                         LookAtTarget(targetPlayer.transform.position);
-                        //LogIfDebugBuild("Watching and Waiting");
-                        if (!targetPlayer.isInsideFactory)
-                        {
-                            // LogIfDebugBuild("Target Player Left The Facility. Switching Targets");
-                            lastGenTauntTime = 0f;
-                            SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
-                            return;
-                        }
-                        if (Time.time - lastGenTauntTime >= randGenTauntTime && IsHost)
+                        if (Time.time - lastGenTauntTime >= randGenTauntTime)
                         {
                             Taunt();
                         }
-                        if (!isSeen && distanceToPlayer > idleDistance)
+                        else if (Time.time - lastEnemyTauntTime >= randEnemyTauntTime)
                         {
-                            SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
+                            EnemyTaunt();
                         }
                     }
                     break;
                 case (int)State.SearchingForPlayer:
                     agent.speed = baseSpeed * 1.5f;
-                    // LogIfDebugBuild("Searching For Closest Player");
-                    StartSearch(transform.position);
+                    creatureSFX.volume = 1f;
                     SearchForPlayers();
                     if (FoundClosestPlayerInRange())
                     {
-                        // LogIfDebugBuild("Start Target Player");
                         StopSearch(currentSearch);
                         SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
                     }
                     break;
                 case (int)State.StealthyPursuit:
                     agent.speed = baseSpeed;
-                    // LogIfDebugBuild("Stealthily follow player.");
+                    creatureSFX.volume = 0.5f;
+                    agent.autoBraking = true;
+                    foundSpot = SetDestinationToHiddenPosition();
                     if (targetPlayer != null)
                     {
-                        if (!targetPlayer.isInsideFactory)
+                        if (!foundSpot)
                         {
-                            LogIfDebugBuild("Target Player Left The Facility. Switching Targets");
-                            lastGenTauntTime = 0f;
-                            SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
-                            return;
-                        }
-                        creatureSFX.volume = 0.5f;
-                        foundSpot = SetDestinationToHiddenPosition();
-                        if (!foundSpot && distanceToPlayer < idleDistance)
-                        {
-                            SwitchToBehaviourClientRpc((int)State.AggressivePursuit);
-                        }
-                        else
-                        {
-                            if (Time.time - lastGenTauntTime >= randGenTauntTime && IsHost)
-                            {
-                                Taunt();
-                            }
-                        }
-                    }
-                    else
-                    {
-                        SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
-                    }
-                    break;
-                case (int)State.AggressivePursuit:
-                    agent.speed = baseSpeed * 2.5f;
-                    // LogIfDebugBuild("Cannot hide, turn to aggression.");
-                    if (targetPlayer != null)
-                    {
-                        if (!targetPlayer.isInsideFactory)
-                        {
-                            LogIfDebugBuild("Target Player Left The Facility. Switching Targets");
-                            lastAgrTauntTime = 0f;
-                            SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
-                            return;
-                        }
-                        creatureSFX.volume = 1.7f;
-                        LookAtTarget(targetPlayer.transform.position);
-
-                        if (distanceToPlayer > aggroRange && distanceToClosestPlayer > aggroRange)
-                        {
-                            foundSpot = SetDestinationToHiddenPosition();
-                            if (foundSpot)
-                            {
-                                SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
-                            }
-                        }
-
-                        if (FoundClosestPlayerInRange())
-                        {
-                            if (Time.time - lastAgrTauntTime >= randAgrTauntTime && IsHost)
-                            {
-                                OtherTaunt("aggro", ref lastAgrTaunt, ref lastAgrTauntTime, ref randAgrTauntTime);
-                            }
                             SetDestinationToPosition(targetPlayer.transform.position);
-                            if (Time.time - lastAttackTime >= 1f && canSeePlayer)
-                            {
-                                if (distanceToPlayer < attackRange)
-                                {
-                                    AttackPlayer(targetPlayer);
-                                }
-                                else if (distanceToClosestPlayer < attackRange && closestPlayer != null)
-                                {
-                                    targetPlayer = closestPlayer;
-                                    AttackPlayer(targetPlayer);
-                                }
-                                else
-                                {
-                                    SwitchToBehaviourClientRpc((int)State.GetOutOfSight);
-                                }
-                            }
-                        }
-                    }
-                    break;
-
-                case (int)State.GetOutOfSight:
-                    agent.speed = baseSpeed * 1.5f;
-                    if (targetPlayer != null)
-                    {
-                        // LogIfDebugBuild("Gotta find a place to hide!");
-                        if (!targetPlayer.isInsideFactory)
-                        {
-                            if (FoundClosestPlayerInRange())
-                            {
-                                LogIfDebugBuild("Start Target Player");
-                                StopSearch(currentSearch);
-                                SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
-                            }
-                            else
-                            {
-                                return;
-                            }
                         }
 
                         if (Time.time - lastGenTauntTime >= randGenTauntTime)
                         {
                             Taunt();
                         }
-
-                        foundSpot = SetDestinationToHiddenPosition();
-                        if (!foundSpot && isSeen)
+                        else if (Time.time - lastEnemyTauntTime >= randEnemyTauntTime)
                         {
-                            SwitchToBehaviourClientRpc((int)State.AggressivePursuit);
+                            EnemyTaunt();
                         }
-                        else if (!foundSpot && closestPlayer != null)
+                    }
+                    break;
+                case (int)State.AggressivePursuit:
+                    agent.speed = baseSpeed * 2.5f;
+                    creatureSFX.volume = 1.7f;
+                    agent.autoBraking = false;
+                    if (closestPlayer != null)
+                    {
+                        aggroPlayer = closestPlayer;
+                        canSeePlayer = CanSeePlayer(aggroPlayer);
+
+                        if (Time.time - lastAgrTauntTime >= randAgrTauntTime)
+                        {
+                            OtherTaunt("aggro", ref lastAgrTaunt, ref lastAgrTauntTime, ref randAgrTauntTime);
+                        }
+
+                        LookAtTarget(aggroPlayer.transform.position);
+                        SetDestinationToPosition(aggroPlayer.transform.position);
+                        
+                        if (Time.time - lastAttackTime >= 1f && canSeePlayer && attackRange >= distanceToClosestPlayer)
+                        {
+                            AttackPlayer(aggroPlayer);
+                        }
+                    }
+                    break;
+                case (int)State.GetOutOfSight:
+                    agent.speed = baseSpeed * 1.5f;
+                    creatureSFX.volume = 1f;
+                    agent.autoBraking = true;
+                    foundSpot = SetDestinationToHiddenPosition();
+                    if (targetPlayer != null)
+                    {
+                        if (Time.time - lastGenTauntTime >= randGenTauntTime)
+                        {
+                            Taunt();
+                        }
+                        if (!foundSpot)
                         {
                             SetDestinationToPosition(targetPlayer.transform.position);
                         }
-                        else if (!isSeen)
-                        {
-                            SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
-                        }
-                    } else if (!isSeen)
-                    {
-                        SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                     }
                     break;
-
                 default:
                     LogIfDebugBuild("This Behavior State doesn't exist!");
                     break;
-            }
-
-            if ((currentBehaviourStateIndex == (int)State.StealthyPursuit || currentBehaviourStateIndex == (int)State.Idle))
-            {
-                if (Time.time - lastEnemyTauntTime >= randEnemyTauntTime)
-                {
-                    EnemyTaunt();
-                }
             }
         }
 
         public override void DoAIInterval()
         {
             base.DoAIInterval();
-
-            lastPosition = curPosition;
-            curPosition = transform.position;
 
             if (isEnemyDead || StartOfRound.Instance.allPlayersDead)
             {
@@ -352,48 +324,37 @@ namespace LethalGargoyles.src.Enemy
             switch (currentBehaviourStateIndex)
             {
                 case (int)State.StealthyPursuit:
-                    if (curPosition == lastPosition)
+                case (int)State.SearchingForPlayer:
+                    if (!moveTowardsDestination)
                     {
-                        SwitchToBehaviourClientRpc((int)State.Idle);
+                        LogIfDebugBuild($"startIdle in state {currentBehaviourStateIndex}");
                         DoAnimationClientRpc("startIdle");
                     }
-                    else
+                    else if (moveTowardsDestination)
                     {
+                        LogIfDebugBuild($"startWalk in state {currentBehaviourStateIndex}");
                         DoAnimationClientRpc("startWalk");
                     }
                     break;
                 case (int)State.Idle:
+                    LogIfDebugBuild($"startIdle in state {currentBehaviourStateIndex}");
                     DoAnimationClientRpc("startIdle");
                     break;
-                case (int)State.SearchingForPlayer:
-                    if (curPosition == lastPosition)
-                    {
-                        DoAnimationClientRpc("startIdle");
-                    }
-                    else
-                    {
-                        DoAnimationClientRpc("startWalk");
-                    }
-                    break;
                 case (int)State.AggressivePursuit:
-                    if (curPosition == lastPosition)
+                    if (!moveTowardsDestination)
                     {
+                        LogIfDebugBuild($"startIdle in state {currentBehaviourStateIndex}");
                         DoAnimationClientRpc("startIdle");
                     }
-                    else
+                    else if (moveTowardsDestination)
                     {
+                        LogIfDebugBuild($"startChase in state {currentBehaviourStateIndex}");
                         DoAnimationClientRpc("startChase");
                     }
                     break;
                 case (int)State.GetOutOfSight:
-                    if (curPosition == lastPosition)
-                    {
-                        DoAnimationClientRpc("startIdle");
-                    }
-                    else
-                    {
-                        DoAnimationClientRpc("startWalk");
-                    }
+                    LogIfDebugBuild($"startWalk in state {currentBehaviourStateIndex}");
+                    DoAnimationClientRpc("startWalk");
                     break;
                 default:
                     LogIfDebugBuild("This Behavior State doesn't exist!");
@@ -428,15 +389,31 @@ namespace LethalGargoyles.src.Enemy
             {
                 PlayerControllerB player = StartOfRound.Instance.allPlayerScripts[i];
 
-                if (player.isInsideFactory)
+                if (!isOutside)
                 {
-                    float distance = Vector3.Distance(transform.position, player.transform.position);
-                    if (distance < closestDistance)
+                    if (player.isInsideFactory)
                     {
-                        closestPlayerInsideFactory = player;
-                        closestDistance = distance;
+                        float distance = Vector3.Distance(transform.position, player.transform.position);
+                        if (distance < closestDistance)
+                        {
+                            closestPlayerInsideFactory = player;
+                            closestDistance = distance;
+                        }
                     }
                 }
+                else
+                {
+                    if (!player.isInsideFactory)
+                    {
+                        float distance = Vector3.Distance(transform.position, player.transform.position);
+                        if (distance < closestDistance)
+                        {
+                            closestPlayerInsideFactory = player;
+                            closestDistance = distance;
+                        }
+                    }
+                }
+                
             }
 
             if (closestPlayerInsideFactory != null)
@@ -637,7 +614,6 @@ namespace LethalGargoyles.src.Enemy
             //LogIfDebugBuild("Attack!");
             agent.speed = 0f;
             lastAttackTime = Time.time;
-            DoAnimationClientRpc("startIdle");
             DoAnimationClientRpc("swingAttack");
             PlayVoice(Utility.AudioManager.attackClips, "attack");
             player.DamagePlayer(attackDamage, false, true, CauseOfDeath.Bludgeoning);
@@ -651,7 +627,7 @@ namespace LethalGargoyles.src.Enemy
                     SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                 }
             }
-            GameNetworkManager.Instance.localPlayerController.JumpToFearLevel(1f);
+            player.JumpToFearLevel(1f);
         }
 
         public override void HitEnemy(int force = 1, PlayerControllerB? playerWhoHit = null, bool playHitSFX = false, int hitID = -1)
@@ -692,7 +668,7 @@ namespace LethalGargoyles.src.Enemy
             }
 
             {
-                int randomIndex = Random.Range(0, Utility.AudioManager.deathClips.Count());
+                int randomIndex = UnityEngine.Random.Range(0, Utility.AudioManager.deathClips.Count());
                 TauntClientRpc(Utility.AudioManager.deathClips[randomIndex].name, "death");
             }
         }
@@ -705,7 +681,7 @@ namespace LethalGargoyles.src.Enemy
             }
             else if (clip == null && clipList != null)
             {
-                int randInt = Random.Range(0, clipList.Count());
+                int randInt = UnityEngine.Random.Range(0, clipList.Count());
                 LogIfDebugBuild(clipType + " count is :" + clipList.Count() + " | Index: " + randInt);
                 TauntClientRpc(clipList[randInt].name, clipType, true);
             }
@@ -716,7 +692,7 @@ namespace LethalGargoyles.src.Enemy
             string? playerName = null;
             string? priorCauseOfDeath = null;
             string? playerClass = null;
-            int randSource = Random.Range(1, 4);
+            int randSource = UnityEngine.Random.Range(1, 4);
 
             List<(string playerName, string causeOfDeath, string source)> priorDeathCauses = [];
             List<(string playerName, string causeOfDeath, string source)> getDeathCausesList = GetDeathCauses.previousRoundDeaths;
@@ -747,20 +723,22 @@ namespace LethalGargoyles.src.Enemy
                     }
                 }
 
-                foreach (PlayerControllerB player in StartOfRound.Instance.allPlayerScripts)
+                if (Plugin.Instance.IsEmployeeClassesLoaded)
                 {
-                    if (targetPlayer.playerSteamId == player.playerSteamId)
+                    foreach (PlayerControllerB player in StartOfRound.Instance.allPlayerScripts)
                     {
-                        if (Plugin.Instance.IsEmployeeClassesLoaded)
+                        if (targetPlayer.playerUsername == player.playerUsername)
                         {
                             playerClass = EmployeeClassesClass.GetPlayerClass(player);
+                            break;
                         }
-                        break;
                     }
                 }
             }
 
-            int randInt = Random.Range(1, 200);
+            int randInt = UnityEngine.Random.Range(1, 200);
+
+            LogIfDebugBuild($"Random Taunt Number is {randInt}");
 
             if (randInt < 3)
             {
@@ -770,7 +748,7 @@ namespace LethalGargoyles.src.Enemy
             {
                 OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
             } 
-            else if(randInt < 195 && playerName != null && priorCauseOfDeath != null && !GargoyleIsTalking())
+            else if(randInt < 188 && playerName != null && priorCauseOfDeath != null && !GargoyleIsTalking())
             {
                 string? randClip = ChooseRandomClip("taunt_priordeath_" + priorCauseOfDeath, "PriorDeath");
                 if (randClip == null) { Plugin.Logger.LogError($"Clip missing for {priorCauseOfDeath} death."); return; }
@@ -816,17 +794,17 @@ namespace LethalGargoyles.src.Enemy
                     int randomIndex;
                     do
                     {
-                        randomIndex = Random.Range(0, clipList.Count());
+                        randomIndex = UnityEngine.Random.Range(0, clipList.Count());
                     } while (randomIndex == lastTaunt);
 
                     TauntClientRpc(clipList[randomIndex].name, clipType);
                     lastTauntTime = Time.time;
-                    randTime = Random.Range(minTaunt, maxTaunt);
+                    randTime = UnityEngine.Random.Range(minTaunt, maxTaunt);
                 } 
                 else
                 {
                     lastTauntTime = Time.time;
-                    randTime = Random.Range((int)(minTaunt/2), (int)(maxTaunt/2));
+                    randTime = UnityEngine.Random.Range((int)(minTaunt/2), (int)(maxTaunt/2));
                 }
             }
             else
@@ -891,7 +869,7 @@ namespace LethalGargoyles.src.Enemy
                                     break;
                             }
 
-                            int randInt = Random.Range(1, 100);
+                            int randInt = UnityEngine.Random.Range(1, 100);
                             if (clip != null && randInt < 3)
                             {
                                 LogIfDebugBuild(enemy.enemyType.enemyName);
@@ -900,7 +878,7 @@ namespace LethalGargoyles.src.Enemy
                                 if (randomClip == null ) { return; }
                                 TauntClientRpc(randomClip, "enemy");
                                 lastEnemyTauntTime = Time.time;
-                                randEnemyTauntTime = Random.Range((int)(minTaunt), (int)(maxTaunt));
+                                randEnemyTauntTime = UnityEngine.Random.Range((int)(minTaunt), (int)(maxTaunt));
                             }
                         }
                     }
@@ -935,7 +913,7 @@ namespace LethalGargoyles.src.Enemy
 
             if (tempList.Count < 0) { return null; }
 
-            int intRand = Random.Range(0, tempList.Count);
+            int intRand = UnityEngine.Random.Range(0, tempList.Count);
             return tempList[intRand].name;
         }
 
