@@ -18,6 +18,7 @@ namespace LethalGargoyles.src.Config
         public ConfigEntry<int> distWarn;
         public ConfigEntry<int> bufferDist;
         public ConfigEntry<int> awareDist;
+        public ConfigEntry<bool> enablePush;
         public Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
 
         public PluginConfig(ConfigFile cfg)
@@ -74,6 +75,10 @@ namespace LethalGargoyles.src.Config
                                  "Awareness",
                                  60,
                                  "How far away is the gargoyle aware of other players. This will affect performance, as this setting is used to calculate pathing.");
+            enablePush = cfg.Bind("General",
+                                 "Pushy Gargoyle",
+                                 true,
+                                 "Enable/Disable the push state for the gargoyle.");
 
             /*foreach (AudioClip clip in ModAssets.LoadAllAssets<AudioClip>())
             {

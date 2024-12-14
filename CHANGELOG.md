@@ -1,10 +1,16 @@
 ## v0.4.0
 
+## v0.4.0 - The Pushy Gargoyle
+
 **New Features:**
 
 - **Push Attack:**
     - Added a new "PushTarget" attack pattern where the gargoyle attempts to push players off catwalks.
     - Implemented a new cause of death in Coroner for deaths caused by gargoyle pushes.
+- **New Voice Lines:**
+    - Added a voice line for the gargoyle push death.
+- **Configuration:**
+    - Added a config option to enable or disable the "PushTarget" attack.
 
 **Changes:**
 
@@ -12,6 +18,15 @@
     - Adjusted pathfinding logic to support the new `PushTarget` state.
     - Added a 45-second cooldown to the `PushTarget` state after a successful push.
     - Prevented line of sight from breaking the `PushTarget` state within aggro range.
+- **CoronerClass**
+    - Changed the registry name of the gargoyle push death to avoid conflicts.
+
+**Documentation:**
+
+- Updated the README with the latest changes and improvements.
+    - Separated vanilla Prior Death and Coroner Prior Death voice lines in the "Current Voice Lines" section.
+    - Added Employee Classes voice lines to the "Current Voice Lines" section.
+    - Updated the `Strings_en-us_gargoyle.xml` localization file with new death messages for the gargoyle push death.
 
 ## v0.3.0 Employee Classes Update
 

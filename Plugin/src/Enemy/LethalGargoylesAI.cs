@@ -98,6 +98,7 @@ namespace LethalGargoyles.src.Enemy
         private float distWarn = 0f;
         private float bufferDist = 0f;
         private float awareDist = 0f;
+        private bool enablePush = false;
 
         enum State
         {
@@ -135,6 +136,7 @@ namespace LethalGargoyles.src.Enemy
             distWarn = Plugin.BoundConfig.distWarn.Value;
             bufferDist = Plugin.BoundConfig.bufferDist.Value;
             awareDist = Plugin.BoundConfig.awareDist.Value;
+            enablePush = Plugin.BoundConfig.enablePush.Value;
             lastAttackTime = Time.time;
             pushTimer = Time.time;
 
@@ -203,7 +205,7 @@ namespace LethalGargoyles.src.Enemy
                     {
                         SwitchToBehaviourClientRpc((int)State.AggressivePursuit);
                     }
-                    else if (distanceToClosestPlayer <= attackRange && !isSeen && closestPlayer != null && currentBehaviourStateIndex != (int)State.AggressivePursuit)
+                    else if (distanceToClosestPlayer <= attackRange && !isSeen && closestPlayer != null && currentBehaviourStateIndex != (int)State.AggressivePursuit && enablePush)
                     {
                         PushPlayer(closestPlayer);
                     }
@@ -227,7 +229,7 @@ namespace LethalGargoyles.src.Enemy
                         }
                     }
 
-                    if (!targetSeesGargoyle && targetPlayer != null && currentBehaviourStateIndex != (int)State.AggressivePursuit && Time.time > pushTimer)
+                    if (!targetSeesGargoyle && targetPlayer != null && currentBehaviourStateIndex != (int)State.AggressivePursuit && Time.time > pushTimer && enablePush)
                     {
                         if (matPlayerIsOn == "Catwalk")
                         {
