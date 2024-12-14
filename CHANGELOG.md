@@ -1,3 +1,18 @@
+## v0.4.0
+
+**New Features:**
+
+- **Push Attack:**
+    - Added a new "PushTarget" attack pattern where the gargoyle attempts to push players off catwalks.
+    - Implemented a new cause of death in Coroner for deaths caused by gargoyle pushes.
+
+**Changes:**
+
+- **Gargoyle AI:**
+    - Adjusted pathfinding logic to support the new `PushTarget` state.
+    - Added a 45-second cooldown to the `PushTarget` state after a successful push.
+    - Prevented line of sight from breaking the `PushTarget` state within aggro range.
+
 ## v0.3.0 Employee Classes Update
 
 **New Features:**

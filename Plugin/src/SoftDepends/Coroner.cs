@@ -10,6 +10,7 @@ namespace LethalGargoyles.src.SoftDepends
     internal class CoronerClass
     {
         public static Object? GargoyleDeath { get; private set; } = null;
+        public static Object? GargoylePushDeath { get; private set; } = null;
 
         // Initialize Coroner integration
         [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
@@ -19,8 +20,9 @@ namespace LethalGargoyles.src.SoftDepends
             {
                 // Invoke the method with the existing 'player' object
                 GargoyleDeath = API.Register("DeathEnemyLGargoyle");
+                GargoylePushDeath = API.Register("DeathEnemyLGargoylePush");
 
-                Plugin.Logger.LogInfo($"Gargoyle cause of death registered with Coroner.");
+                Plugin.Logger.LogInfo($"Gargoyle causes of death registered with Coroner.");
             }
             catch (Exception ex)
             {
@@ -28,9 +30,18 @@ namespace LethalGargoyles.src.SoftDepends
             }
         }
 
-        internal static void CoronerSetCauseOfDeath(PlayerControllerB player)
+        internal static void CoronerSetCauseOfDeath(PlayerControllerB player, string deathType)
         {
-            Coroner.API.SetCauseOfDeath(player, (AdvancedCauseOfDeath?)GargoyleDeath);
+            switch (deathType)
+            {
+                case "Attack":
+                    Coroner.API.SetCauseOfDeath(player, (AdvancedCauseOfDeath?)GargoyleDeath);
+                    break;
+                case "Push":
+                    Coroner.API.SetCauseOfDeath(player, (AdvancedCauseOfDeath?)GargoylePushDeath);
+                    break;
+            }
+            
         }
 
         internal static string? CoronerGetCauseOfDeath(PlayerControllerB player)
