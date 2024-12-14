@@ -20,7 +20,7 @@ namespace LethalGargoyles.src.SoftDepends
             {
                 // Invoke the method with the existing 'player' object
                 GargoyleDeath = API.Register("DeathEnemyLGargoyle");
-                GargoylePushDeath = API.Register("DeathEnemyLGargoylePush");
+                GargoylePushDeath = API.Register("DeathEnemyGargoylePush");
 
                 Plugin.Logger.LogInfo($"Gargoyle causes of death registered with Coroner.");
             }
