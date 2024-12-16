@@ -1,0 +1,164 @@
+ private RelativePosition? lastFailedPosition = null;
+ private RelativePosition currentTargetPosition = RelativePosition.Front; // Start at Front
+
+ public void AttemptMovement(PlayerControllerB player)
+ {
+     RelativePosition currentPosition = GetRelativePosition(player);
+     LogIfDebugBuild($"Current Relative Position: {currentPosition}");
+
+     // --- Check if already in the desired area ---
+     if (currentPosition == RelativePosition.Back ||
+         currentPosition == RelativePosition.BackRight ||
+         currentPosition == RelativePosition.BackLeft)
+     {
+         LogIfDebugBuild("Already in the desired area (Back, BackRight, or BackLeft). Heading to target.");
+
+         // Calculate the target position (directly behind the player)
+         RelativePosition targetPosition = RelativePosition.Back;
+
+         // Try to move to the target position
+         TryMoveToPosition(targetPosition, player);
+         return;
+     }
+     // ----------------------------------------------
+
+     RelativePosition nextTarget = GetNextTargetPosition(currentPosition, player);
+     LogIfDebugBuild($"Next Target Position: {nextTarget}");
+
+     // Only attempt movement if the target position has changed
+     if (nextTarget != currentPosition)
+     {
+         currentTargetPosition = nextTarget;
+         LogIfDebugBuild($"Trying to move to: {currentTargetPosition}");
+         if (nextTarget != currentTargetPosition)
+         {
+             if (TryMoveToPosition(currentTargetPosition, player))
+             {
+                 lastFailedPosition = null;
+                 LogIfDebugBuild($"Successfully moved to: {currentTargetPosition}");
+             }
+         }
+         else
+         {
+             if (currentTargetPosition == lastFailedPosition)
+             {
+                 LogIfDebugBuild("Stuck at " + currentTargetPosition);
+                 return;
+             }
+             else
+             {
+                 lastFailedPosition = currentTargetPosition;
+                 LogIfDebugBuild("Failed to move to " + currentTargetPosition);
+             }
+         }
+     }
+     else
+     {
+         LogIfDebugBuild("Already at target position: " + currentTargetPosition + ". Skipping movement.");
+     }
+ }
+
+ private RelativePosition GetNextTargetPosition(RelativePosition currentPosition, PlayerControllerB player)
+ {
+     LogIfDebugBuild($"Getting next target for: {currentPosition}");
+
+     // Define the order of positions you want the AI to move through.
+     // This is now the central control for the movement pattern.
+     RelativePosition[] positionOrder = [
+         RelativePosition.Front,
+         RelativePosition.FrontRight,
+         RelativePosition.Right,
+         RelativePosition.BackRight,
+         RelativePosition.Back,
+         RelativePosition.BackLeft,
+         RelativePosition.Left,
+         RelativePosition.FrontLeft
+     ];
+
+     int currentIndex = Array.IndexOf(positionOrder, currentPosition);
+     if (currentIndex == -1) return positionOrder[0];
+
+     Vector3 playerVelocity = player.GetComponent<Rigidbody>().velocity; // Or however you get player velocity
+     Dictionary<RelativePosition, float> scores = [];
+     // Example: Prioritize zones closer to the back and in the direction of player movement
+     List<RelativePosition> potentialTargets = [];
+
+     foreach (RelativePosition pos in positionOrder)
+     {
+         // Calculate a score for each position (higher score = higher priority)
+         float score = 0;
+
+         // Prioritize positions closer to the back (with circularity)
+         int distanceToBack = Mathf.Min(
+             Mathf.Abs(Array.IndexOf(positionOrder, pos) - Array.IndexOf(positionOrder, RelativePosition.Back)),
+             positionOrder.Length - Mathf.Abs(Array.IndexOf(positionOrder, pos) - Array.IndexOf(positionOrder, RelativePosition.Back))
+         );
+         score += 10 - distanceToBack;
+
+         // Prioritize positions aligned with player's facing direction 
+         Vector3 directionToPosition = GetWorldPositionForRelativePosition(pos, player) - player.transform.position;
+         float angleToPlayerFacing = Vector3.Angle(player.transform.forward, directionToPosition);
+
+         // Invert the angle if necessary to ensure it's always relative to the player's back
+         if (angleToPlayerFacing < 180f)
+         {
+             angleToPlayerFacing = 360f - angleToPlayerFacing;
+         }
+
+         score += 10 - (angleToPlayerFacing / 45f);
+         // ------------------------------------------------------------------
+
+         // Prioritize positions in the direction of player movement (simplified example)
+         if (playerVelocity.x > 0 && (pos == RelativePosition.Right || pos == RelativePosition.BackRight))
+             score += 5;
+         else if (playerVelocity.x < 0 && (pos == RelativePosition.Left || pos == RelativePosition.BackLeft))
+             score += 5;
+
+         // Store the score in the dictionary
+         scores[pos] = score;
+         LogIfDebugBuild($"  - {pos}: Score = {score}");
+     }
+
+     // Order the positions by score (descending)
+     var sortedPositions = scores.OrderByDescending(x => x.Value).Select(x => x.Key);
+
+     // Log the sorted positions and their scores
+     string sortedPositionsLog = "Sorted positions: ";
+     foreach (var pos in sortedPositions)
+     {
+         sortedPositionsLog += $"{pos} ({scores[pos]}), ";
+     }
+     LogIfDebugBuild(sortedPositionsLog);
+
+     // Select the highest-scoring position
+     RelativePosition nextPosition = sortedPositions.First();
+
+     LogIfDebugBuild($"Returning: {nextPosition} (Score: {scores[nextPosition]})");
+     return nextPosition;
+ }
+        private readonly float orbitDistance = 6f; // Base orbit distance
+        private Vector3 GetWorldPositionForRelativePosition(RelativePosition relativePosition, PlayerControllerB player)
+        {
+            Vector3 playerPosition = player.transform.position;
+            Vector3 playerForward = player.transform.forward;
+            Vector3 playerRight = player.transform.right;
+
+            float distance = orbitDistance; // Default distance
+            if (sideDistances.TryGetValue(relativePosition, out float customDistance))
+            {
+                distance = customDistance;
+            }
+
+            return relativePosition switch
+            {
+                RelativePosition.Front => playerPosition + playerForward * distance,
+                RelativePosition.FrontRight => playerPosition + (playerForward + playerRight).normalized * distance,
+                RelativePosition.Right => playerPosition + playerRight * distance,
+                RelativePosition.BackRight => playerPosition + (-playerForward + playerRight).normalized * distance,
+                RelativePosition.Back => playerPosition - playerForward * distance,
+                RelativePosition.BackLeft => playerPosition + (-playerForward - playerRight).normalized * distance,
+                RelativePosition.Left => playerPosition - playerRight * distance,
+                RelativePosition.FrontLeft => playerPosition + (playerForward - playerRight).normalized * distance,
+                _ => playerPosition,// Should not happen
+            };
+        }
