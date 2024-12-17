@@ -10,6 +10,7 @@ using LethalGargoyles.src.SoftDepends;
 using HarmonyLib;
 using System.Reflection;
 using UnityEngine.AI;
+using System.IO;
 
 namespace LethalGargoyles.src.Enemy
 {
@@ -415,7 +416,6 @@ namespace LethalGargoyles.src.Enemy
                     }
                     break;
                 case (int)State.GetOutOfSight:
-                    LogIfDebugBuild("Player can see me. Hiding");
                     if (agent.hasPath)
                     {
                         DoAnimationClientRpc("startWalk");
@@ -447,7 +447,9 @@ namespace LethalGargoyles.src.Enemy
                         Vector3 targetPosition = GetTargetPosition(targetPlayer);
                         SetDestinationToPosition(targetPosition, true);
                         // Log whether EvaluatePath was called
-                        LogIfDebugBuild($"Current position: {transform.position} | Evaluated path. New target position: {agent.destination}");
+                        LogIfDebugBuild($"Current position: {transform.position}");
+                        LogIfDebugBuild($"Distance to target: {agent.remainingDistance}");
+                        LogIfDebugBuild($"Evaluated path. New target position: {agent.destination}");
                         targetTimer = Time.time;
                     }
                     if (agent.hasPath)
@@ -641,11 +643,11 @@ namespace LethalGargoyles.src.Enemy
         {
             { RelativeZone.Front, 15f },
             { RelativeZone.FrontRight, 12f },
-            { RelativeZone.Right, 6f },
-            { RelativeZone.BackRight, 4f },
+            { RelativeZone.Right, 10f },
+            { RelativeZone.BackRight, 6f },
             { RelativeZone.Back, 3f }, // Reduced side distance for Back
-            { RelativeZone.BackLeft, 4f },
-            { RelativeZone.Left, 6f },
+            { RelativeZone.BackLeft, 6f },
+            { RelativeZone.Left, 10f },
             { RelativeZone.FrontLeft, 12f },
         };
 
@@ -686,53 +688,95 @@ namespace LethalGargoyles.src.Enemy
 
         private Vector3 GetTargetPosition(PlayerControllerB player)
         {
-            bool rightPath = true;
-            bool LeftPath = true;
-
+            bool rightPath = false;
+            bool leftPath = false;
+            bool getUnstuck = false;
+            if (distanceToPlayer > 20f)
+            {
+                return targetPlayer.transform.position;
+            }
             currentZone = GetRelativeZone(player);
+            if (currentZone == RelativeZone.Back ||
+                currentZone == RelativeZone.BackRight ||
+                currentZone == RelativeZone.BackLeft)
+            {
+                return targetPlayer.transform.position;
+            }
+            if (agent.remainingDistance < 2f) getUnstuck = true;
 
-            if (RelativeZones.Count == 0 || currentZone == nextZoneLeft || currentZone == nextZoneRight) GetBufferPositions(player.transform.position);
+            if (RelativeZones.Count == 0 || currentZone == nextZoneLeft || currentZone == nextZoneRight || getUnstuck) GetBufferPositions(player.transform.position);
 
             nextZoneRight = GetNextZone(currentZone, 1);
             nextZoneLeft = GetNextZone(currentZone, -1);
 
             LogIfDebugBuild($"Current Zone: {RelativeZoneToString(currentZone)} | Next Right Zone {nextZoneRight} | Next Left Zone {nextZoneLeft} ");
-            
-            RelativeZone testZone = nextZoneRight;
-            do
-            {
-                if (RelativeZones[testZone] == Vector3.zero) { rightPath = false; }
-                testZone = GetNextZone(testZone, 1);
-            } while (testZone != RelativeZone.Back);
 
-            if (!rightPath)
+            leftPath = CheckZonePosition("Left");
+            rightPath = CheckZonePosition("Right");
+
+            if ((rightPath && RelativeZoneToString(currentZone).Contains("Right")) || rightPath && !leftPath)
             {
-                testZone = nextZoneLeft;
-                do
-                {
-                    if (RelativeZones[testZone] == Vector3.zero) { LeftPath = false; }
-                    testZone = GetNextZone(testZone, -1);
-                } while (testZone != RelativeZone.Back);
+                LogIfDebugBuild("Going Right");
+                return RelativeZones[nextZoneRight];
             }
-
-            if (!LeftPath && !rightPath)
+            else if ((leftPath && RelativeZoneToString(currentZone).Contains("Left")) || (leftPath && !rightPath))
+            {
+                LogIfDebugBuild("Going Left");
+                return RelativeZones[nextZoneLeft];
+            }
+            else
             {
                 LogIfDebugBuild("Staying Still");
                 return transform.position;
             }
-            else
+        }
+
+        private bool CheckZonePosition(string side)
+        {
+            if (side == "Right")
             {
-                if (rightPath)
+                RelativeZone testZone = nextZoneRight;
+                do
                 {
-                    LogIfDebugBuild("Going Right");
-                    return RelativeZones[nextZoneRight];
-                }
-                else
-                {
-                    LogIfDebugBuild("Going Left");
-                    return RelativeZones[nextZoneLeft];
-                }
+                    if (RelativeZones[testZone] == Vector3.zero && testZone != RelativeZone.Front) { return false; }
+                    LogIfDebugBuild($"Testing Right side: {RelativeZoneToString(testZone)} | Position: {RelativeZones[testZone]}");
+                    testZone = GetNextZone(testZone, 1);
+                    LogIfDebugBuild($"Calculating path from {RelativeZones[nextZoneRight]} to {RelativeZones[testZone]}");
+                    NavMeshPath path = new();
+                    if (!NavMesh.CalculatePath(RelativeZones[nextZoneRight], RelativeZones[testZone], NavMesh.AllAreas, path) && testZone != RelativeZone.Back && testZone != RelativeZone.Front)
+                    {
+                        LogIfDebugBuild($"Path calculation failed. Path status: {path.status}");
+                        return false;
+                    }
+                    else
+                    {
+                        LogIfDebugBuild($"Path calculation successful. Path corners: {string.Join(", ", path.corners)}");
+                    }
+                } while (testZone != RelativeZone.Back);
             }
+            else if (side == "Left")
+            {
+                RelativeZone testZone = nextZoneLeft;
+                do
+                {
+                    if (RelativeZones[testZone] == Vector3.zero && testZone != RelativeZone.Front) { return false; }
+                    LogIfDebugBuild($"Testing Left side: {RelativeZoneToString(testZone)} | Position: {RelativeZones[testZone]}");
+                    testZone = GetNextZone(testZone, -1);
+                    LogIfDebugBuild($"Calculating path from {RelativeZones[nextZoneLeft]} to {RelativeZones[testZone]}");
+                    NavMeshPath path = new();
+                    if (!NavMesh.CalculatePath(RelativeZones[nextZoneLeft], RelativeZones[testZone], NavMesh.AllAreas, path) && testZone != RelativeZone.Back && testZone != RelativeZone.Front)
+                    {
+                        LogIfDebugBuild($"Path calculation failed. Path status: {path.status}");
+                        return false;
+                    }
+                    else
+                    {
+                        LogIfDebugBuild($"Path calculation successful. Path corners: {string.Join(", ", path.corners)}");
+                    }
+                } while (testZone != RelativeZone.Back);
+            }
+
+            return true;
         }
 
         private void GetBufferPositions(Vector3 playerPos)
@@ -740,31 +784,63 @@ namespace LethalGargoyles.src.Enemy
             RelativeZones.Clear();
             foreach (RelativeZone position in System.Enum.GetValues(typeof(RelativeZone)))
             {
-                RelativeZones.Add(position, GetBufferedPosition(playerPos, position));
+                Vector3 bufferedPosition = GetBufferedPosition(playerPos, position);
+                RelativeZones.Add(position, bufferedPosition);
+
+                // Log the calculated position for each zone
+                LogIfDebugBuild($"Zone: {RelativeZoneToString(position)}, Position: {bufferedPosition}");
             }
         }
 
         public Vector3 GetBufferedPosition(Vector3 playerPOS, RelativeZone position)
         {
-            // Get the direction vector from the player to the AI
-            Vector3 directionToAI = transform.position - playerPOS;
-            directionToAI.Normalize(); // Make sure it's a unit vector
-            
+            // Get the player's forward vector
+            Vector3 playerForward = targetPlayer.transform.forward;
+
+            // Calculate the direction vector for the given relative position
+            Vector3 directionVector = GetDirectionVector(position, playerForward);
+
             // Get the buffer distance for the given relative position
             float distance = bufferDistances[position];
 
             // Calculate the buffered position
-            Vector3 potentialPos = ValidateZonePosition(playerPOS + directionToAI * distance);
+            Vector3 potentialPos = ValidateZonePosition(playerPOS + directionVector * distance);
             return potentialPos;
+        }
+
+        private Vector3 GetDirectionVector(RelativeZone zone, Vector3 playerForward)
+        {
+            switch (zone)
+            {
+                case RelativeZone.Front:
+                    return playerForward;
+                case RelativeZone.FrontRight:
+                    return (playerForward + targetPlayer.transform.right).normalized;
+                case RelativeZone.Right:
+                    return targetPlayer.transform.right;
+                case RelativeZone.BackRight:
+                    return (-playerForward + targetPlayer.transform.right).normalized;
+                case RelativeZone.Back:
+                    return -playerForward;
+                case RelativeZone.BackLeft:
+                    return (-playerForward - targetPlayer.transform.right).normalized;
+                case RelativeZone.Left:
+                    return -targetPlayer.transform.right;
+                case RelativeZone.FrontLeft:
+                    return (playerForward - targetPlayer.transform.right).normalized;
+                default:
+                    return Vector3.zero;
+            }
         }
 
         private Vector3 ValidateZonePosition(Vector3 position)
         {
-            if (NavMesh.SamplePosition(position, out NavMeshHit hit, 10f, NavMesh.AllAreas))
+            if (NavMesh.SamplePosition(position, out NavMeshHit hit, 5f, NavMesh.AllAreas))
             {
                 return hit.position;
             }
 
+            LogIfDebugBuild("Invalid Position");
             return Vector3.zero; // Return Vector3.zero to indicate an invalid position
         }
 
