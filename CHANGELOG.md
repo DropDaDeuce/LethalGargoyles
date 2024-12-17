@@ -1,5 +1,3 @@
-## v0.4.0
-
 ## v0.4.0 - The Pushy Gargoyle
 
 **New Features:**
