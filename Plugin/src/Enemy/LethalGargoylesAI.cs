@@ -10,6 +10,7 @@ using LethalGargoyles.src.SoftDepends;
 using HarmonyLib;
 using System.Reflection;
 using UnityEngine.AI;
+using UnityEngine.UIElements;
 
 namespace LethalGargoyles.src.Enemy
 {
@@ -623,6 +624,8 @@ namespace LethalGargoyles.src.Enemy
         private RelativeZone currentZone;
         private RelativeZone nextZoneRight;
         private RelativeZone nextZoneLeft;
+        private float leftPathDist;
+        private float rightPathDist;
 
         private Vector3 GetTargetPosition(PlayerControllerB player)
         {
@@ -647,16 +650,16 @@ namespace LethalGargoyles.src.Enemy
 
             LogIfDebugBuild($"Current Zone: {RelativeZoneToString(currentZone)} | Next Right Zone {nextZoneRight} | Next Left Zone {nextZoneLeft} ");
 
-            bool leftPath = CheckZonePosition("Left");
-            bool rightPath = CheckZonePosition("Right");
+            bool leftPath = CheckZonePath("Left");
+            bool rightPath = CheckZonePath("Right");
 
             RelativeZone targetZone = rightPath ? nextZoneRight : nextZoneLeft;
 
-            if ((rightPath && RelativeZoneToString(currentZone).Contains("Right")) || (rightPath && !leftPath))
+            if ((rightPath && RelativeZoneToString(currentZone).Contains("Right")) || (rightPath && !leftPath) || (rightPathDist <= leftPathDist && rightPath && leftPath))
             {
                 LogIfDebugBuild("Going Right");
             }
-            else if ((leftPath && RelativeZoneToString(currentZone).Contains("Left")) || (leftPath && !rightPath))
+            else if ((leftPath && RelativeZoneToString(currentZone).Contains("Left")) || (leftPath && !rightPath) || (leftPathDist < rightPathDist && leftPath && rightPath))
             {
                 LogIfDebugBuild("Going Left");
             }
@@ -669,22 +672,27 @@ namespace LethalGargoyles.src.Enemy
             return RelativeZones[targetZone];
         }
 
-        private bool CheckZonePosition(string side)
+        private bool CheckZonePath(string side)
         {
-            RelativeZone testZone = side == "Right" ? nextZoneRight : nextZoneLeft;
+            RelativeZone testZone = currentZone;
             RelativeZone nextZone; // Initialize nextZone here
+            float pathDist = 0f;
+            leftPathDist = 1000f;
+            rightPathDist = 1000f;
 
             do
             {
                 nextZone = side == "Right" ? GetNextZone(testZone, 1) : GetNextZone(testZone, -1); // Calculate nextZone inside the loop
-                if (nextZone == RelativeZone.Front){return false; } // Don't go around the front of the player
-                if (RelativeZones[testZone] == Vector3.zero) {return false;}
 
                 LogIfDebugBuild($"Testing {side} side: {RelativeZoneToString(testZone)} | Position: {RelativeZones[testZone]}");
                 LogIfDebugBuild($"Testing for valid path of {RelativeZoneToString(testZone)} to {RelativeZoneToString(nextZone)}");
 
+                if (nextZone == RelativeZone.Front){ LogIfDebugBuild($"Path calculation failed. nextZone is 'Front''");  return false;} // Don't go around the front of the player
+                if (RelativeZones[testZone] == Vector3.zero) { LogIfDebugBuild($"Path calculation failed. Zone {RelativeZoneToString(testZone)} = Vector3.Zero"); return false;}
+                if (RelativeZones[nextZone] == Vector3.zero) { LogIfDebugBuild($"Path calculation failed. Zone {RelativeZoneToString(nextZone)} = Vector3.Zero"); return false; }
+
                 NavMeshPath path = new();
-                if (!NavMesh.CalculatePath(RelativeZones[testZone], RelativeZones[nextZone], NavMesh.AllAreas, path))
+                if (!CheckForPath(RelativeZones[testZone], RelativeZones[nextZone]))
                 {
                     LogIfDebugBuild($"Path calculation failed. Path status: {path.status}");
                     return false; // Path calculation failed, so path is not possible
@@ -692,9 +700,23 @@ namespace LethalGargoyles.src.Enemy
                 else
                 {
                     LogIfDebugBuild($"Path calculation successful. Path corners: {string.Join(", ", path.corners)}");
+                    pathDist += path.corners.Length > 1
+                    ? Vector3.Distance(RelativeZones[testZone], path.corners[1]) // Distance from current zone to first corner
+                    : 0f; // No corners, no distance
                 }
                 testZone = nextZone; // Move to the next zone
             } while (testZone != RelativeZone.Back); // Stop once it reaches the back
+
+            LogIfDebugBuild($"{side} side test was successful | Total distance: {pathDist}");
+
+            if (side == "Right")
+            {
+                rightPathDist = pathDist;
+            }
+            else
+            {
+                leftPathDist = pathDist;
+            }
 
             return true; // All paths are valid
         }
@@ -742,6 +764,23 @@ namespace LethalGargoyles.src.Enemy
                 RelativeZone.FrontLeft => (playerForward - targetPlayer.transform.right).normalized,
                 _ => Vector3.zero,
             };
+        }
+
+        private bool CheckForPath(Vector3 sourcePosition, Vector3 targetPosition)
+        {
+            NavMeshPath path = new NavMeshPath();
+            if (!NavMesh.CalculatePath(sourcePosition, targetPosition, NavMesh.AllAreas, path))
+            {
+                return false; // Path calculation failed
+            }
+
+            // Additional checks from the base game's SetDestinationToPosition
+            if (Vector3.Distance(path.corners[^1], RoundManager.Instance.GetNavMeshPosition(targetPosition, RoundManager.Instance.navHit, 2.7f)) > 1.55f)
+            {
+                return false; // Path is not valid according to the base game's logic
+            }
+
+            return true; // Path is valid
         }
 
         private Vector3 ValidateZonePosition(Vector3 position)
