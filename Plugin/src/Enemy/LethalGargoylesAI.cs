@@ -10,7 +10,6 @@ using LethalGargoyles.src.SoftDepends;
 using HarmonyLib;
 using System.Reflection;
 using UnityEngine.AI;
-using System.IO;
 
 namespace LethalGargoyles.src.Enemy
 {
