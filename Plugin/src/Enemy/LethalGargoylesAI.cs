@@ -10,7 +10,7 @@ using LethalGargoyles.src.SoftDepends;
 using HarmonyLib;
 using System.Reflection;
 using UnityEngine.AI;
-using UnityEngine.UIElements;
+using System.Threading;
 
 namespace LethalGargoyles.src.Enemy
 {
@@ -86,6 +86,10 @@ namespace LethalGargoyles.src.Enemy
         private int pushStage = 0;
         private float targetTimer = 0f;
         public AISearchRoutine? searchForPlayers;
+        public int myID;
+        private static readonly Dictionary<int, PlayerControllerB?> gargoyleTargets = []; // Use a static dictionary
+        private static int lastGargoyleToSwitch = -1; // Track the last gargoyle that switched targets
+        private static float playerCheckTimer = 0f;
 
         private float baseSpeed = 0f;
         private float attackRange = 0f;
@@ -149,7 +153,8 @@ namespace LethalGargoyles.src.Enemy
             enablePush = Plugin.BoundConfig.enablePush.Value;
             lastAttackTime = Time.time;
             pushTimer = Time.time;
-
+            myID = agent.GetInstanceID();
+            gargoyleTargets[myID] = targetPlayer;
             creatureVoice.maxDistance *= 3;
         }
 
@@ -158,6 +163,8 @@ namespace LethalGargoyles.src.Enemy
             base.Update();
             isAllPlayersDead = StartOfRound.Instance.allPlayersDead;
             if (isEnemyDead || isAllPlayersDead) return;
+
+            gargoyleTargets[myID] = targetPlayer;
 
             if (LGInstance != null)
             {
@@ -176,12 +183,12 @@ namespace LethalGargoyles.src.Enemy
 
             if (targetPlayer == null)
             {
-                FoundClosestPlayerInRange();
+                SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
             }
             else
             {
+                if (!isOutside != targetPlayer.isInsideFactory) { SwitchToBehaviourClientRpc((int)State.SearchingForPlayer); }
                 matPlayerIsOn = StartOfRound.Instance.footstepSurfaces[targetPlayer.currentFootstepSurfaceIndex].surfaceTag;
-                Transform targetPlayerTransform = targetPlayer.transform;
                 distanceToPlayer = Vector3.Distance(transform.position, targetPlayer.transform.position);
             }
 
@@ -267,19 +274,14 @@ namespace LethalGargoyles.src.Enemy
                     agent.speed = baseSpeed * 1.5f;
                     creatureSFX.volume = 1f;
                     SearchForPlayers();
-                    if (FoundClosestPlayerInRange())
-                    {
-                        StopSearch(currentSearch);
-                        SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
-                    }
                     break;
                 case (int)State.StealthyPursuit:
                     agent.speed = baseSpeed;
                     creatureSFX.volume = 0.5f;
                     agent.autoBraking = true;
-                    foundSpot = SetDestinationToHiddenPosition();
                     if (targetPlayer != null)
                     {
+                        foundSpot = SetDestinationToHiddenPosition();
                         if (!foundSpot)
                         {
                             SetDestinationToPosition(targetPlayer.transform.position);
@@ -293,6 +295,10 @@ namespace LethalGargoyles.src.Enemy
                         {
                             EnemyTaunt();
                         }
+                    }
+                    else
+                    {
+                        SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                     }
                     break;
                 case (int)State.AggressivePursuit:
@@ -322,9 +328,9 @@ namespace LethalGargoyles.src.Enemy
                     agent.speed = baseSpeed * 1.5f;
                     creatureSFX.volume = 1f;
                     agent.autoBraking = true;
-                    foundSpot = SetDestinationToHiddenPosition();
                     if (targetPlayer != null)
                     {
+                        foundSpot = SetDestinationToHiddenPosition();
                         if (Time.time - lastGenTauntTime >= randGenTauntTime)
                         {
                             Taunt();
@@ -386,10 +392,21 @@ namespace LethalGargoyles.src.Enemy
                 return;
             }
 
+            if (Time.time - playerCheckTimer > 3f && ChangeTarget())
+            {
+                FoundClosestPlayerInRange();
+                playerCheckTimer = Time.time;
+            }
+
             switch (currentBehaviourStateIndex)
             {
-                case (int)State.StealthyPursuit:
                 case (int)State.SearchingForPlayer:
+                    if (FoundClosestPlayerInRange())
+                    {
+                        StopSearch(currentSearch);
+                        SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
+                    }
+
                     if (agent.hasPath)
                     {
                         DoAnimationClientRpc("startWalk");
@@ -399,6 +416,7 @@ namespace LethalGargoyles.src.Enemy
                         DoAnimationClientRpc("startIdle");
                     }
                     break;
+                case (int)State.StealthyPursuit:
                 case (int)State.GetOutOfSight:
                     if (agent.hasPath)
                     {
@@ -474,37 +492,153 @@ namespace LethalGargoyles.src.Enemy
                 .Where(player => !player.isPlayerDead && player.isInsideFactory == !isOutside)
                 .ToList();
 
-            // Get all gargoyles and their targets
-            var gargoyleTargets = RoundManager.Instance.SpawnedEnemies
-                .Where(enemy => enemy.enemyType.enemyName == "LethalGargoyle")
-                .Select(enemy => enemy.targetPlayer)
-                .ToList();
+            // Get all gargoyles
+            List<LethalGargoylesAI> gargoyles = RoundManager.Instance.SpawnedEnemies
+            .Where(enemy => enemy is LethalGargoylesAI g && g.isOutside == isOutside) // Filter by location
+            .Cast<LethalGargoylesAI>()
+            .ToList();
 
-            // Find the closest valid player not already targeted by another gargoyle
-            PlayerControllerB? closestPlayer = validPlayers
-                .Where(player => !gargoyleTargets.Contains(player)) // Filter out already targeted players
-                .OrderBy(player => Vector3.Distance(transform.position, player.transform.position)) // Order by distance
-                .FirstOrDefault(); // Take the closest player
-
-            // If no untargeted player is found, target the closest player in the same area
-            if (closestPlayer == null && validPlayers.Any())
+            Dictionary<PlayerControllerB, int> targetCounts = validPlayers.ToDictionary(p => p, p => 0);
+            foreach (var gargoyle in gargoyles)
             {
-                closestPlayer = validPlayers
-                    .OrderBy(player => Vector3.Distance(transform.position, player.transform.position))
-                    .First();
+                if (!gargoyleTargets.ContainsKey(gargoyle.myID))
+                {
+                    gargoyleTargets[gargoyle.myID] = gargoyle.targetPlayer;
+                }
+
+                if (gargoyleTargets.TryGetValue(gargoyle.myID, out var target) && target != null && validPlayers.Contains(target))
+                {
+                    targetCounts[target]++;
+                }
             }
 
-            if (closestPlayer != null)
+            // If this gargoyle has a target AND more than one gargoyle is targeting it
+            // AND there is another valid player available
+            if (targetPlayer != null &&
+                targetCounts.ContainsKey(targetPlayer) && // Check if the targetPlayer is in the dictionary
+                targetCounts[targetPlayer] > 1 &&
+                validPlayers.Count > 1)
             {
-                targetPlayer = closestPlayer;
-                //LogIfDebugBuild("Found You!");
-                return true;
+                // Try to find a player not targeted by any other gargoyle
+                closestPlayer = targetCounts
+                    .Where(kvp => kvp.Value == 0)
+                    .OrderBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
+                    .Select(kvp => kvp.Key)
+                    .FirstOrDefault();
+
+                // If an untargeted player is found, switch targets
+                if (closestPlayer != null)
+                {
+                    LogIfDebugBuild($"Changing {myID}'s target from {targetPlayer.playerClientId} to {closestPlayer.playerClientId}");
+                    gargoyleTargets[myID] = closestPlayer; // Update gargoyleTargets with the new target
+                    targetPlayer = closestPlayer;
+                    // LogIfDebugBuild("Found You!");
+                    return true;
+                }
             }
             else
             {
-                // LogIfDebugBuild("Where are you?");
-                return false;
+                targetPlayer = null;
             }
+
+            // If this gargoyle doesn't have a target yet OR no suitable alternative was found
+            if (targetPlayer == null)
+            {
+                // Try to find a player not targeted by any other gargoyle
+                closestPlayer = targetCounts
+                    .Where(kvp => kvp.Value == 0)
+                    .OrderBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
+                    .Select(kvp => kvp.Key)
+                    .FirstOrDefault();
+
+                // If all players are already targeted, find the one with the least gargoyles targeting them
+                if (closestPlayer == null)
+                {
+                    closestPlayer = targetCounts
+                        .OrderBy(kvp => kvp.Value)
+                        .ThenBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
+                        .Select(kvp => kvp.Key)
+                        .FirstOrDefault();
+                }
+
+                if (closestPlayer != null)
+                {
+                    targetPlayer = closestPlayer;
+                    LogIfDebugBuild($"{myID} is targeting {targetPlayer.playerClientId}");
+                    return true;
+                }
+                else
+                {
+                    LogIfDebugBuild($"{myID} has no target");
+                    return false;
+                }
+            }
+
+            if (!gargoyleTargets.ContainsKey(myID))
+            {
+                gargoyleTargets[myID] = targetPlayer; // Add the current target to gargoyleTargets
+            }
+            // Keep the current target if no suitable alternative is found or only one player is available
+            return true;
+        }
+
+        // Helper function to check if the gargoyle needs to re-evaluate its target
+        private bool ChangeTarget()
+        {
+            // Get all alive players in the same area (outside or inside)
+            List<PlayerControllerB> validPlayers = StartOfRound.Instance.allPlayerScripts
+            .Where(player => !player.isPlayerDead && player.isInsideFactory == !isOutside)
+            .ToList();
+
+            // Get all gargoyles
+            List<LethalGargoylesAI> gargoyles = RoundManager.Instance.SpawnedEnemies
+            .Where(enemy => enemy is LethalGargoylesAI g && g.isOutside == isOutside) // Filter by location
+            .Cast<LethalGargoylesAI>()
+            .ToList();
+
+            // Create a dictionary to store the number of gargoyles targeting each player
+            Dictionary<PlayerControllerB, int> targetCounts = validPlayers.ToDictionary(p => p, p => 0);
+            foreach (var gargoyle in gargoyles)
+            {
+                if (!gargoyleTargets.ContainsKey(gargoyle.myID))
+                {
+                    gargoyleTargets[gargoyle.myID] = gargoyle.targetPlayer;
+                }
+
+                if (gargoyleTargets.TryGetValue(gargoyle.myID, out var target) && target != null && validPlayers.Contains(target))
+                {
+                    targetCounts[target]++;
+                }
+            }
+
+            // Check if the gargoyle needs to re-evaluate its target, ONLY if it's targeting the same player
+            // AND it's this gargoyle's turn to potentially switch
+            if (targetPlayer != null &&
+                gargoyleTargets.ContainsKey(myID) &&
+                gargoyleTargets[myID] == targetPlayer &&
+                targetCounts.ContainsKey(targetPlayer) && // Ensure targetPlayer is in the dictionary
+                targetCounts[targetPlayer] > 1 &&
+                validPlayers.Count > 1)
+            {
+                LogIfDebugBuild("Checking if I need to change targets");
+                // Get a list of gargoyle IDs, sorted by their ID value
+                List<int> gargoyleIDs = [.. gargoyles.Select(g => g.myID).OrderBy(id => id)];
+                LogIfDebugBuild($"Gargoyle ID's: {gargoyleIDs.Count}");
+                // Determine the index of this gargoyle in the sorted list
+                int myIndex = gargoyleIDs.IndexOf(myID);
+                LogIfDebugBuild($"My Index: {myIndex}");
+                // Calculate the index of the gargoyle that should switch
+                int switchIndex = (lastGargoyleToSwitch + 1) % gargoyleIDs.Count;
+                LogIfDebugBuild($"Switch Index: {switchIndex}");
+
+                // Update the last gargoyle that switched
+                lastGargoyleToSwitch = switchIndex > -1 ? gargoyleIDs[switchIndex] : 0;
+
+                // Only re-evaluate the target if this gargoyle is chosen
+                return myIndex == switchIndex;
+            }
+
+            return false; // No need to re-evaluate the target
         }
 
         public void SearchForPlayers()
@@ -768,7 +902,7 @@ namespace LethalGargoyles.src.Enemy
 
         private bool CheckForPath(Vector3 sourcePosition, Vector3 targetPosition)
         {
-            NavMeshPath path = new NavMeshPath();
+            NavMeshPath path = new();
             if (!NavMesh.CalculatePath(sourcePosition, targetPosition, NavMesh.AllAreas, path))
             {
                 return false; // Path calculation failed

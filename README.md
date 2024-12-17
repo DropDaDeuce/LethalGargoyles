@@ -13,16 +13,9 @@ This mischievous gargoyle's goal is to follow you around and annoy you with his 
 <details>
 <summary>Gargoyle Behavior (Spoilers)</summary>
 
-The gargoyle's primary goal is to annoy the player. It will try to stay close while remaining hidden, but its stealth skills are still under development. If the player enters its aggro range, it will chase and attack them. Be careful, as it might occasionally push you into walls (a bug that's being worked on).
-
-The gargoyle's taunts are categorized as follows:
-
-* General
-* Aggro
-* Gargoyle Death
-* Player Death
-* Enemy Proximity
-* Prior Death
+- The gargoyle's primary goal is to annoy the player. It will try to stay close while remaining hidden, but its stealth skills are still under development.
+- If the player enters its aggro range, it will chase and attack them. Be careful, as it might occasionally push you into walls (a bug that's being worked on).
+- If the target player is walking on a catwalk, the gargoyle will try to push the player, potentially off the catwalk!
 
 </details>
 
@@ -72,6 +65,17 @@ Voice lines are organized into the following categories:
 </details>
 
 ## Current Voice Lines
+
+The gargoyle's taunts are categorized as follows:
+
+* General
+* Aggro
+* Gargoyle Death
+* Player Death
+* Enemy Proximity
+* Prior Death Vanilla
+* Prior Death Coroner
+* Employee Classes
 
 <details>
 <summary>General (General taunts that play randomly during gameplay)</summary>
@@ -253,7 +257,6 @@ Voice lines are organized into the following categories:
     - Near a ledge
     - Kill another enemy
     - Getting lost
- - Add Employee Classes soft dependency and integration. - Idea submitted by Plague
  - Find more ways for him to be mischievous. (Keeping the theme of him trying to stay hidden)
 
 ### Credits:

@@ -16,15 +16,19 @@
     - Adjusted pathfinding logic to support the new `PushTarget` state.
     - Added a 45-second cooldown to the `PushTarget` state after a successful push.
     - Prevented line of sight from breaking the `PushTarget` state within aggro range.
-- **CoronerClass**
+    - Improved target selection to distribute targets more evenly among players.
+    - Gargoyles now attempt to spread their targets across all players in the same area.
+- **CoronerClass:**
     - Changed the registry name of the gargoyle push death to avoid conflicts.
+- **Performance:**
+    - Optimized `LethalGargoylesAI` for improved performance and readability.
 
 **Documentation:**
 
 - Updated the README with the latest changes and improvements.
-    - Separated vanilla Prior Death and Coroner Prior Death voice lines in the "Current Voice Lines" section.
-    - Added Employee Classes voice lines to the "Current Voice Lines" section.
-    - Updated the `Strings_en-us_gargoyle.xml` localization file with new death messages for the gargoyle push death.
+- Separated vanilla Prior Death and Coroner Prior Death voice lines in the "Current Voice Lines" section.
+- Added Employee Classes voice lines to the "Current Voice Lines" section.
+- Updated the `Strings_en-us_gargoyle.xml` localization file with new death messages for the gargoyle push death.
 
 ## v0.3.0 Employee Classes Update
 
@@ -63,7 +67,7 @@
 
 **Documentation:**
 
-- Updated the README and CHANGELOG with the latest changes and improvements.
+- Updated the README with the latest changes and improvements.
 
 ## v0.2.0 Custom Voices Update
 
@@ -86,7 +90,7 @@
 
 **Documentation:**
 
-- Updated the README and CHANGELOG with the latest changes and improvements.
+- Updated the README with the latest changes and improvements.
 - Reformatted the changelog to display the latest version at the top.
 
 ## v0.1.0 
