@@ -18,6 +18,7 @@
     - Prevented line of sight from breaking the `PushTarget` state within aggro range.
     - Improved target selection to distribute targets more evenly among players.
     - Gargoyles now attempt to spread their targets across all players in the same area.
+    - Improved base pathfinding to utilize positions near AI nodes instead of directly on them, increasing pathing options and preventing gargoyle stacking.
 - **CoronerClass:**
     - Changed the registry name of the gargoyle push death to avoid conflicts.
 - **Performance:**
