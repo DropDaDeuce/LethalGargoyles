@@ -1265,13 +1265,20 @@ namespace LethalGargoyles.src.Enemy
 
             if (targetPlayer != null)
             {
-                if (targetPlayer.isPlayerDead)
-                {
-                    if (Plugin.Instance.IsCoronerLoaded) SoftDepends.CoronerClass.CoronerSetCauseOfDeath(player, "Push");
-                    targetPlayer = null;
-                    PlayVoice(Utility.AudioManager.playerDeathClips, "playerdeath");
-                    SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
-                }
+                StartCoroutine(SetCauseOfDeathDelay(player, "Push"));
+            }
+        }
+
+        public IEnumerator SetCauseOfDeathDelay(PlayerControllerB player, string deathType)
+        {
+            yield return new WaitForSeconds(2f);
+            //Wait for 2 seconds
+            if (targetPlayer.isPlayerDead)
+            {
+                if (Plugin.Instance.IsCoronerLoaded) SoftDepends.CoronerClass.CoronerSetCauseOfDeath(player, deathType);
+                targetPlayer = null;
+                PlayVoice(Utility.AudioManager.playerDeathClips, "playerdeath");
+                SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
             }
         }
 
