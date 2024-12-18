@@ -37,3 +37,7 @@ namespace LethalGargoyles.src.Patch
         }
     }
 }
+public static class StaticHelpers
+{
+    
+}

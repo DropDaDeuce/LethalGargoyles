@@ -10,7 +10,7 @@ using LethalGargoyles.src.SoftDepends;
 using HarmonyLib;
 using System.Reflection;
 using UnityEngine.AI;
-using System.Threading;
+using System.Collections.Concurrent;
 
 namespace LethalGargoyles.src.Enemy
 {
@@ -87,9 +87,11 @@ namespace LethalGargoyles.src.Enemy
         private float targetTimer = 0f;
         public AISearchRoutine? searchForPlayers;
         public int myID;
-        private static readonly Dictionary<int, PlayerControllerB?> gargoyleTargets = []; // Use a static dictionary
-        private static int lastGargoyleToSwitch = -1; // Track the last gargoyle that switched targets
+        protected static ConcurrentDictionary<int, PlayerControllerB?> gargoyleTargets = []; // Use a static dictionary
+        private static int lastGargoyleToSwitch = 0; // Track the last gargoyle that switched targets
         private static float playerCheckTimer = 0f;
+        private List<PlayerControllerB> validPlayers = [];
+        private List<LethalGargoylesAI> gargoyles = [];
 
         private float baseSpeed = 0f;
         private float attackRange = 0f;
@@ -392,9 +394,9 @@ namespace LethalGargoyles.src.Enemy
                 return;
             }
 
-            if (Time.time - playerCheckTimer > 3f && ChangeTarget())
+            if (Time.time - playerCheckTimer > 3f && targetPlayer != null)
             {
-                FoundClosestPlayerInRange();
+                ChangeTarget();
                 playerCheckTimer = Time.time;
             }
 
@@ -441,7 +443,7 @@ namespace LethalGargoyles.src.Enemy
                     }
                     break;
                 case (int)State.PushTarget:
-                    if (Time.time - targetTimer > 0.5f)
+                    if (Time.time - targetTimer > 0.5f && targetPlayer != null)
                     {
                         // Log the condition that should trigger EvaluatePath
                         LogIfDebugBuild($"Attempting to evaluate path. Distance to player: {distanceToPlayer}");
@@ -487,25 +489,11 @@ namespace LethalGargoyles.src.Enemy
 
         bool FoundClosestPlayerInRange()
         {
-            // Get all alive players in the same area (outside or inside)
-            List<PlayerControllerB> validPlayers = StartOfRound.Instance.allPlayerScripts
-                .Where(player => !player.isPlayerDead && player.isInsideFactory == !isOutside)
-                .ToList();
-
-            // Get all gargoyles
-            List<LethalGargoylesAI> gargoyles = RoundManager.Instance.SpawnedEnemies
-            .Where(enemy => enemy is LethalGargoylesAI g && g.isOutside == isOutside) // Filter by location
-            .Cast<LethalGargoylesAI>()
-            .ToList();
+            UpdateValidPlayersAndGargoyles();
 
             Dictionary<PlayerControllerB, int> targetCounts = validPlayers.ToDictionary(p => p, p => 0);
             foreach (var gargoyle in gargoyles)
             {
-                if (!gargoyleTargets.ContainsKey(gargoyle.myID))
-                {
-                    gargoyleTargets[gargoyle.myID] = gargoyle.targetPlayer;
-                }
-
                 if (gargoyleTargets.TryGetValue(gargoyle.myID, out var target) && target != null && validPlayers.Contains(target))
                 {
                     targetCounts[target]++;
@@ -515,130 +503,125 @@ namespace LethalGargoyles.src.Enemy
             // If this gargoyle has a target AND more than one gargoyle is targeting it
             // AND there is another valid player available
             if (targetPlayer != null &&
-                targetCounts.ContainsKey(targetPlayer) && // Check if the targetPlayer is in the dictionary
+                targetCounts.ContainsKey(targetPlayer) &&
                 targetCounts[targetPlayer] > 1 &&
                 validPlayers.Count > 1)
             {
-                // Try to find a player not targeted by any other gargoyle
-                closestPlayer = targetCounts
-                    .Where(kvp => kvp.Value == 0)
-                    .OrderBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
-                    .Select(kvp => kvp.Key)
-                    .FirstOrDefault();
+                // Try to find a player not targeted by any other gargoyle (using helper method)
+                var newTarget = FindBestTarget(targetCounts);
 
                 // If an untargeted player is found, switch targets
-                if (closestPlayer != null)
+                if (newTarget != null && newTarget != targetPlayer)
                 {
-                    LogIfDebugBuild($"Changing {myID}'s target from {targetPlayer.playerClientId} to {closestPlayer.playerClientId}");
-                    gargoyleTargets[myID] = closestPlayer; // Update gargoyleTargets with the new target
-                    targetPlayer = closestPlayer;
-                    // LogIfDebugBuild("Found You!");
-                    return true;
+                    LogIfDebugBuild($"Changing {myID}'s target from {targetPlayer.playerClientId} to {newTarget.playerClientId}");
+                    gargoyleTargets[myID] = newTarget;
+                    targetPlayer = newTarget;
                 }
             }
             else
             {
-                targetPlayer = null;
+                targetPlayer = null; // Reset target if conditions aren't met
             }
 
-            // If this gargoyle doesn't have a target yet OR no suitable alternative was found
             if (targetPlayer == null)
             {
-                // Try to find a player not targeted by any other gargoyle
-                closestPlayer = targetCounts
-                    .Where(kvp => kvp.Value == 0)
-                    .OrderBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
-                    .Select(kvp => kvp.Key)
-                    .FirstOrDefault();
+                targetPlayer = FindBestTarget(targetCounts); // Use helper method
 
-                // If all players are already targeted, find the one with the least gargoyles targeting them
-                if (closestPlayer == null)
+                if (targetPlayer != null)
                 {
-                    closestPlayer = targetCounts
-                        .OrderBy(kvp => kvp.Value)
-                        .ThenBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
-                        .Select(kvp => kvp.Key)
-                        .FirstOrDefault();
-                }
-
-                if (closestPlayer != null)
-                {
-                    targetPlayer = closestPlayer;
                     LogIfDebugBuild($"{myID} is targeting {targetPlayer.playerClientId}");
                     return true;
                 }
                 else
                 {
-                    LogIfDebugBuild($"{myID} has no target");
+                    //LogIfDebugBuild($"{myID} has no target");
                     return false;
                 }
             }
 
-            if (!gargoyleTargets.ContainsKey(myID))
-            {
-                gargoyleTargets[myID] = targetPlayer; // Add the current target to gargoyleTargets
-            }
-            // Keep the current target if no suitable alternative is found or only one player is available
             return true;
         }
 
-        // Helper function to check if the gargoyle needs to re-evaluate its target
-        private bool ChangeTarget()
+        private void ChangeTarget()
         {
-            // Get all alive players in the same area (outside or inside)
-            List<PlayerControllerB> validPlayers = StartOfRound.Instance.allPlayerScripts
-            .Where(player => !player.isPlayerDead && player.isInsideFactory == !isOutside)
-            .ToList();
+            UpdateValidPlayersAndGargoyles();
 
-            // Get all gargoyles
-            List<LethalGargoylesAI> gargoyles = RoundManager.Instance.SpawnedEnemies
-            .Where(enemy => enemy is LethalGargoylesAI g && g.isOutside == isOutside) // Filter by location
-            .Cast<LethalGargoylesAI>()
-            .ToList();
-
-            // Create a dictionary to store the number of gargoyles targeting each player
             Dictionary<PlayerControllerB, int> targetCounts = validPlayers.ToDictionary(p => p, p => 0);
             foreach (var gargoyle in gargoyles)
             {
-                if (!gargoyleTargets.ContainsKey(gargoyle.myID))
-                {
-                    gargoyleTargets[gargoyle.myID] = gargoyle.targetPlayer;
-                }
-
                 if (gargoyleTargets.TryGetValue(gargoyle.myID, out var target) && target != null && validPlayers.Contains(target))
                 {
                     targetCounts[target]++;
                 }
             }
 
-            // Check if the gargoyle needs to re-evaluate its target, ONLY if it's targeting the same player
-            // AND it's this gargoyle's turn to potentially switch
+            // 1. Check if any player has MORE than their "fair share" of gargoyles
+            int fairShare = Mathf.CeilToInt((float)gargoyles.Count / validPlayers.Count);
+            bool hasOverTargetedPlayer = targetCounts.Any(kvp => kvp.Value > fairShare);
+
             if (targetPlayer != null &&
                 gargoyleTargets.ContainsKey(myID) &&
                 gargoyleTargets[myID] == targetPlayer &&
-                targetCounts.ContainsKey(targetPlayer) && // Ensure targetPlayer is in the dictionary
-                targetCounts[targetPlayer] > 1 &&
-                validPlayers.Count > 1)
+                targetCounts.ContainsKey(targetPlayer) &&
+                targetCounts[targetPlayer] > fairShare && // This gargoyle is on an "over-targeted" player
+                validPlayers.Count > 1 &&
+                hasOverTargetedPlayer)                  // There's at least one over-targeted player
             {
                 LogIfDebugBuild("Checking if I need to change targets");
-                // Get a list of gargoyle IDs, sorted by their ID value
+
+                // Get a list of gargoyle IDs (consider a more robust ordering if needed)
                 List<int> gargoyleIDs = [.. gargoyles.Select(g => g.myID).OrderBy(id => id)];
-                LogIfDebugBuild($"Gargoyle ID's: {gargoyleIDs.Count}");
-                // Determine the index of this gargoyle in the sorted list
                 int myIndex = gargoyleIDs.IndexOf(myID);
-                LogIfDebugBuild($"My Index: {myIndex}");
-                // Calculate the index of the gargoyle that should switch
                 int switchIndex = (lastGargoyleToSwitch + 1) % gargoyleIDs.Count;
-                LogIfDebugBuild($"Switch Index: {switchIndex}");
 
-                // Update the last gargoyle that switched
-                lastGargoyleToSwitch = switchIndex > -1 ? gargoyleIDs[switchIndex] : 0;
+                // Always update lastGargoyleToSwitch 
+                lastGargoyleToSwitch = switchIndex;
 
-                // Only re-evaluate the target if this gargoyle is chosen
-                return myIndex == switchIndex;
+                if (myIndex == switchIndex)
+                {
+                    // Find a player with LESS than their "fair share" of gargoyles
+                    var newTarget = targetCounts
+                        .Where(kvp => kvp.Value < fairShare)
+                        .OrderBy(kvp => kvp.Value)                // Prioritize the least targeted
+                        .ThenBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
+                        .Select(kvp => kvp.Key)
+                        .FirstOrDefault();
+
+                    if (newTarget != null)
+                    {
+                        LogIfDebugBuild($"Changing {myID}'s target from {targetPlayer.playerClientId} to {newTarget.playerClientId}");
+                        gargoyleTargets[myID] = newTarget;
+                        targetPlayer = newTarget;
+                    }
+                }
             }
+        }
 
-            return false; // No need to re-evaluate the target
+        private PlayerControllerB? FindBestTarget(Dictionary<PlayerControllerB, int> targetCounts)
+        {
+            var closestPlayer = targetCounts
+                .Where(kvp => kvp.Value == 0)
+                .OrderBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
+                .Select(kvp => kvp.Key)
+                .FirstOrDefault() ?? targetCounts
+                    .OrderBy(kvp => kvp.Value)
+                    .ThenBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
+                    .Select(kvp => kvp.Key)
+                    .FirstOrDefault();
+            return closestPlayer;
+        }
+
+        // Helper method to update validPlayers and gargoyles lists
+        private void UpdateValidPlayersAndGargoyles()
+        {
+            validPlayers = StartOfRound.Instance.allPlayerScripts
+                .Where(player => !player.isPlayerDead && player.isInsideFactory == !isOutside)
+                .ToList();
+
+            gargoyles = RoundManager.Instance.SpawnedEnemies
+                .Where(enemy => enemy is LethalGargoylesAI g && g.isOutside == isOutside)
+                .Cast<LethalGargoylesAI>()
+                .ToList();
         }
 
         public void SearchForPlayers()
