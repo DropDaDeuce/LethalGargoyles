@@ -11,6 +11,7 @@ using HarmonyLib;
 using System.Reflection;
 using UnityEngine.AI;
 using System.Collections.Concurrent;
+using System.Collections;
 
 namespace LethalGargoyles.src.Enemy
 {
@@ -33,9 +34,10 @@ namespace LethalGargoyles.src.Enemy
                 if (enemyDoorMeterField != null)
                 {
                     float enemyDoorMeter = (float)enemyDoorMeterField.GetValue(__instance);
-                    if (enemyDoorMeter <= 0f && !gargoyles.openedDoors.ContainsKey(__instance))
+                    if (enemyDoorMeter <= 0f && gargoyles.currentDoor == null) // Check if currentDoor is null
                     {
-                        gargoyles.openedDoors.Add(__instance, Time.time);
+                        gargoyles.currentDoor = __instance;  // Assign the door
+                        gargoyles.lastDoorCloseTime = Time.time; // Reset the timer
                     }
                 }
                 else
@@ -54,11 +56,13 @@ namespace LethalGargoyles.src.Enemy
 #pragma warning restore 0649
 
         public static LethalGargoylesAI? LGInstance { get; private set; }
-        public readonly Dictionary<DoorLock, float> openedDoors = [];
+        public DoorLock? currentDoor = null;
+        public float lastDoorCloseTime = 0f;
 
         PlayerControllerB closestPlayer = null!;
         PlayerControllerB aggroPlayer = null!;
-        string? matPlayerIsOn;
+        //string? matPlayerIsOn;
+        //string? objPlayerIsOn;
 
         private float randGenTauntTime = 0f;
         private float randAgrTauntTime = 0f;
@@ -88,10 +92,16 @@ namespace LethalGargoyles.src.Enemy
         public AISearchRoutine? searchForPlayers;
         public int myID;
         protected static ConcurrentDictionary<int, PlayerControllerB?> gargoyleTargets = []; // Use a static dictionary
+        protected static ConcurrentDictionary<PlayerControllerB, ConcurrentDictionary<int, bool>> playerPushStates = [];
         private static int lastGargoyleToSwitch = 0; // Track the last gargoyle that switched targets
-        private static float playerCheckTimer = 0f;
+        private float playerCheckTimer = 0f;
+        private float pathDelayTimer = 0f;
         private List<PlayerControllerB> validPlayers = [];
         private List<LethalGargoylesAI> gargoyles = [];
+        private int previousStateIndex;
+        //private Vector3 mainEntrancePos = default;
+        private Transform? killTrigger;
+        private float distToKillTrigger;
 
         private float baseSpeed = 0f;
         private float attackRange = 0f;
@@ -112,6 +122,20 @@ namespace LethalGargoyles.src.Enemy
             AggressivePursuit,
             Idle,
             PushTarget,
+        }
+
+        string StateToString(int state)
+        {
+            return state switch
+            {
+                0 => "SearchingForPlayer",
+                1 => "StealthyPusuit",
+                2 => "GetOutOfSight",
+                3 => "AggressivePursuit",
+                4 => "Idle",
+                5 => "PushTarget",
+                _ => "Unknown",
+            };
         }
 
         public enum RelativeZone
@@ -158,28 +182,28 @@ namespace LethalGargoyles.src.Enemy
             myID = agent.GetInstanceID();
             gargoyleTargets[myID] = targetPlayer;
             creatureVoice.maxDistance *= 3;
+            pathDelayTimer = Time.time;
+            //mainEntrancePos = RoundManager.FindMainEntrancePosition();
         }
 
         public override void Update()
         {
             base.Update();
+
             isAllPlayersDead = StartOfRound.Instance.allPlayersDead;
             if (isEnemyDead || isAllPlayersDead) return;
 
             gargoyleTargets[myID] = targetPlayer;
 
-            if (LGInstance != null)
+            if (LGInstance != null && currentDoor != null)
             {
-                // Directly iterate and remove doors using LINQ
-                foreach (var door in openedDoors.Where(kvp => Time.time - kvp.Value >= 0.75f &&
-                                                         !kvp.Key.isLocked && // Check if the door is not locked
-                                                         kvp.Key.GetComponent<AnimatedObjectTrigger>().boolValue && // Check if the door is open
-                                                         Vector3.Distance(kvp.Key.transform.position, transform.position) > (currentBehaviourStateIndex == (int)State.Idle ? 2.5f : 4f))
-                                               .ToList())
+                if (Time.time - lastDoorCloseTime >= 0.75f &&  // Use a timer for the delay
+                    !currentDoor.isLocked &&
+                    currentDoor.GetComponent<AnimatedObjectTrigger>().boolValue &&
+                    Vector3.Distance(currentDoor.transform.position, transform.position) > (currentBehaviourStateIndex == (int)State.Idle ? 2.5f : 4f))
                 {
-                    door.Key.gameObject.GetComponent<AnimatedObjectTrigger>().TriggerAnimationNonPlayer(LGInstance.useSecondaryAudiosOnAnimatedObjects, overrideBool: true);
-                    door.Key.CloseDoorNonPlayerServerRpc();
-                    openedDoors.Remove(door.Key);
+                    StartCoroutine(DelayDoorClose(currentDoor));
+                    currentDoor = null; // Reset currentDoor
                 }
             }
 
@@ -189,15 +213,29 @@ namespace LethalGargoyles.src.Enemy
             }
             else
             {
-                if (!isOutside != targetPlayer.isInsideFactory) { SwitchToBehaviourClientRpc((int)State.SearchingForPlayer); }
-                matPlayerIsOn = StartOfRound.Instance.footstepSurfaces[targetPlayer.currentFootstepSurfaceIndex].surfaceTag;
+                //matPlayerIsOn = StartOfRound.Instance.footstepSurfaces[targetPlayer.currentFootstepSurfaceIndex].surfaceTag;
+                //objPlayerIsOn = GetPlayerSurfaceTag(targetPlayer);
                 distanceToPlayer = Vector3.Distance(transform.position, targetPlayer.transform.position);
+
+                if (currentBehaviourStateIndex != (int)State.PushTarget)
+                {
+                    var innerDict = playerPushStates.GetOrAdd(targetPlayer, new ConcurrentDictionary<int, bool>());
+                    // Now you can safely set the push state to false
+                    innerDict[myID] = false;
+
+                    foreach (var player in playerPushStates)
+                    {
+                        if (player.Key.playerUsername != targetPlayer.playerUsername) { player.Value.TryRemove(myID, out _); }
+                    }
+                }
+                if (!isOutside != targetPlayer.isInsideFactory || !targetPlayer.isPlayerControlled || targetPlayer.isPlayerDead) { LogIfDebugBuild($"Player Status: isInsideFactory = {targetPlayer.isInsideFactory}, isPlayerControlled = {targetPlayer.isPlayerControlled}, isPlayerDead = {targetPlayer.isPlayerDead}"); targetPlayer = null; SwitchToBehaviourClientRpc((int)State.SearchingForPlayer); }
+
             }
 
             closestPlayer = GetClosestPlayer();
             distanceToClosestPlayer = closestPlayer != null ? Vector3.Distance(transform.position, closestPlayer.transform.position) : 0f;
 
-            if (pushStage < 1 || (matPlayerIsOn != null && !matPlayerIsOn.StartsWith("Catwalk")))
+            if (pushStage < 1 || (distToKillTrigger > 2f))
             {
                 pushStage = 0;
                 if (distanceToClosestPlayer <= awareDist)
@@ -237,11 +275,27 @@ namespace LethalGargoyles.src.Enemy
                         }
                     }
 
-                    if (!targetSeesGargoyle && targetPlayer != null && currentBehaviourStateIndex != (int)State.AggressivePursuit && Time.time > pushTimer && enablePush)
+                    if (!targetSeesGargoyle &&
+                        targetPlayer != null &&
+                        currentBehaviourStateIndex != (int)State.AggressivePursuit &&
+                        Time.time > pushTimer &&
+                        enablePush &&
+                        (distToKillTrigger <= 2f))
                     {
-                        if (matPlayerIsOn == "Catwalk")
+                        // Lock to prevent concurrent access
+                        lock (playerPushStates)
                         {
-                            SwitchToBehaviourClientRpc((int)State.PushTarget);
+                            if (playerPushStates.TryGetValue(targetPlayer, out var pushStates) &&
+                                !pushStates.Any(kvp => kvp.Key != myID && kvp.Value))
+                            {
+                                // Set the push state BEFORE switching to PushTarget
+                                playerPushStates.GetOrAdd(targetPlayer, new ConcurrentDictionary<int, bool>())[myID] = true;
+                                SwitchToBehaviourClientRpc((int)State.PushTarget);
+                            }
+                            else
+                            {
+                                pushTimer = Time.time + 10f;
+                            }
                         }
                     }
                 }
@@ -257,8 +311,9 @@ namespace LethalGargoyles.src.Enemy
             {
                 case (int)State.Idle:
                     agent.speed = 0f;
+                    agent.angularSpeed = 140f;
                     creatureSFX.volume = 0f;
-                    agent.autoBraking = true;
+                    agent.stoppingDistance = 0.1f;
                     if (targetPlayer != null)
                     {
                         LookAtTarget(targetPlayer.transform.position);
@@ -274,13 +329,16 @@ namespace LethalGargoyles.src.Enemy
                     break;
                 case (int)State.SearchingForPlayer:
                     agent.speed = baseSpeed * 1.5f;
+                    agent.angularSpeed = 250f;
                     creatureSFX.volume = 1f;
+                    agent.stoppingDistance = 0.2f;
                     SearchForPlayers();
                     break;
                 case (int)State.StealthyPursuit:
                     agent.speed = baseSpeed;
+                    agent.angularSpeed = 140f;
                     creatureSFX.volume = 0.5f;
-                    agent.autoBraking = true;
+                    agent.stoppingDistance = 0.1f;
                     if (targetPlayer != null)
                     {
                         foundSpot = SetDestinationToHiddenPosition();
@@ -306,7 +364,8 @@ namespace LethalGargoyles.src.Enemy
                 case (int)State.AggressivePursuit:
                     agent.speed = baseSpeed * 2.5f;
                     creatureSFX.volume = 1.7f;
-                    agent.autoBraking = false;
+                    agent.angularSpeed = 500f;
+                    agent.stoppingDistance = 0.3f;
                     if (closestPlayer != null)
                     {
                         aggroPlayer = closestPlayer;
@@ -328,8 +387,9 @@ namespace LethalGargoyles.src.Enemy
                     break;
                 case (int)State.GetOutOfSight:
                     agent.speed = baseSpeed * 1.5f;
+                    agent.angularSpeed = 250f;
                     creatureSFX.volume = 1f;
-                    agent.autoBraking = true;
+                    agent.stoppingDistance = 0.2f;
                     if (targetPlayer != null)
                     {
                         foundSpot = SetDestinationToHiddenPosition();
@@ -346,10 +406,8 @@ namespace LethalGargoyles.src.Enemy
                 case (int)State.PushTarget:
                     agent.speed = baseSpeed * 2.5f;
                     creatureSFX.volume = 1.7f;
-                    agent.angularSpeed = 360f;
-                    agent.stoppingDistance = 0.1f;
-                    agent.autoBraking = true;
-
+                    agent.angularSpeed = 500f;
+                    agent.stoppingDistance = 0.3f;
                     if (targetPlayer != null)
                     {
                         canSeePlayer = CanSeePlayer(targetPlayer);
@@ -360,6 +418,10 @@ namespace LethalGargoyles.src.Enemy
                             PushPlayer(targetPlayer);
                             pushStage = 0;
                             pushTimer = Time.time + 5f;
+                            if (playerPushStates.TryGetValue(targetPlayer, out var innerDict))
+                            {
+                                innerDict[myID] = false;
+                            }
                             SwitchToBehaviourClientRpc((int)State.StealthyPursuit);
                         }
 
@@ -394,10 +456,22 @@ namespace LethalGargoyles.src.Enemy
                 return;
             }
 
-            if (Time.time - playerCheckTimer > 3f && targetPlayer != null)
+            if (currentBehaviourStateIndex != previousStateIndex)
             {
-                ChangeTarget();
-                playerCheckTimer = Time.time;
+                LogIfDebugBuild(StateToString(currentBehaviourStateIndex));
+            }
+            previousStateIndex = currentBehaviourStateIndex;
+
+            if (targetPlayer != null)
+            {
+                killTrigger = FindNearestKillTrigger(targetPlayer.transform.position);
+                if (Time.time - playerCheckTimer > 3f)
+                {
+                    LogIfDebugBuild($"Closest Kill Trigger: {distToKillTrigger}");
+                    //LogIfDebugBuild($"Player is on {GetPlayerSurfaceTag(targetPlayer)}");
+                    ChangeTarget();
+                    playerCheckTimer = Time.time;
+                }
             }
 
             switch (currentBehaviourStateIndex)
@@ -443,17 +517,23 @@ namespace LethalGargoyles.src.Enemy
                     }
                     break;
                 case (int)State.PushTarget:
-                    if (Time.time - targetTimer > 0.5f && targetPlayer != null)
+                    if ((Time.time - targetTimer > 0.5f || !agent.hasPath)&& targetPlayer != null )
                     {
                         // Log the condition that should trigger EvaluatePath
-                        LogIfDebugBuild($"Attempting to evaluate path. Distance to player: {distanceToPlayer}");
-
-                        Vector3 targetPosition = GetTargetPosition(targetPlayer);
-                        SetDestinationToPosition(targetPosition, true);
+                        //LogIfDebugBuild($"Attempting to evaluate path. Distance to player: {distanceToPlayer}");
+                        if (distanceToPlayer <= 20f)
+                        {
+                            Vector3 targetPosition = GetTargetPosition(targetPlayer);
+                            SetDestinationToPosition(targetPosition, true);
+                        }
+                        else
+                        {
+                            SetDestinationToPosition(targetPlayer.transform.position);
+                        }
                         // Log whether EvaluatePath was called
-                        LogIfDebugBuild($"Current position: {transform.position}");
-                        LogIfDebugBuild($"Distance to target: {agent.remainingDistance}");
-                        LogIfDebugBuild($"Evaluated path. New target position: {agent.destination}");
+                        //LogIfDebugBuild($"Current position: {transform.position}");
+                        //LogIfDebugBuild($"Distance to target: {agent.remainingDistance}");
+                        //LogIfDebugBuild($"Evaluated path. New target position: {agent.destination}");
                         targetTimer = Time.time;
                     }
                     if (agent.hasPath)
@@ -469,6 +549,102 @@ namespace LethalGargoyles.src.Enemy
                     LogIfDebugBuild("This Behavior State doesn't exist!");
                     break;
             }
+        }
+
+        private Transform? FindNearestKillTrigger(Vector3 playerPosition)
+        {
+            // 1. Get all GameObjects in the scene
+            GameObject[] allObjects = GameObject.FindObjectsOfType<GameObject>();
+
+            // 2. Filter by name and the presence of a BoxCollider component
+            List<Transform> killTriggers = allObjects
+                .Where(obj => obj.name.StartsWith("KillTrigger") && obj.TryGetComponent<BoxCollider>(out _))
+                .Select(obj => obj.transform)
+                .ToList();
+
+            // 3. Find the KillTrigger below the player, using ClosestPointOnBounds
+            Transform? nearestTrigger = killTriggers
+                .Where(trigger =>
+                {
+                    // Get the KillTrigger's BoxCollider
+                    BoxCollider boxCollider = trigger.GetComponent<BoxCollider>();
+
+                    // Calculate the closest point on the BoxCollider's bounds 
+                    Vector3 closestPoint3D = boxCollider.ClosestPointOnBounds(playerPosition);
+
+                    // Check if the trigger is below the player and the player is horizontally within the bounds
+                    return trigger.position.y < playerPosition.y &&
+                           Mathf.Abs(closestPoint3D.x - playerPosition.x) < boxCollider.bounds.extents.x + 1f && // Check x-axis
+                           Mathf.Abs(closestPoint3D.z - playerPosition.z) < boxCollider.bounds.extents.z + 1f; // Check z-axis
+                })
+                .FirstOrDefault();
+
+            distToKillTrigger = nearestTrigger != null
+            ? Vector2.Distance(
+                new Vector2(nearestTrigger.GetComponent<BoxCollider>().ClosestPointOnBounds(playerPosition).x,
+                            nearestTrigger.GetComponent<BoxCollider>().ClosestPointOnBounds(playerPosition).z),
+                new Vector2(playerPosition.x, playerPosition.z))
+            : float.MaxValue;
+
+            // Check if the player is INSIDE the kill trigger
+            if (nearestTrigger != null)
+            {
+                BoxCollider boxCollider = nearestTrigger.GetComponent<BoxCollider>();
+                Vector3 playerPosition2D = new Vector3(playerPosition.x, boxCollider.bounds.center.y, playerPosition.z); // Align player's y with trigger's center
+
+                if (boxCollider.bounds.Contains(playerPosition2D))
+                {
+                    distToKillTrigger = 0f; // Set distance to 0 if inside (ignoring y)
+                }
+            }
+
+            return nearestTrigger;
+        }
+
+        private Transform? FindNearestRailing(Vector3 position)
+        {
+            // 1. Get all GameObjects in the scene
+            GameObject[] allObjects = GameObject.FindObjectsOfType<GameObject>();
+
+            // 2. Get the layer index for the "Railing" layer
+            int railingLayer = LayerMask.NameToLayer("Railing");
+
+            // 3. Filter by layer AND distance
+            List<Transform> railings = allObjects
+                .Where(obj => obj.layer == railingLayer && Vector3.Distance(obj.transform.position, position) <= 2f)
+                .Select(obj => obj.transform)
+                .ToList();
+
+            // 4. Find the nearest railing (if any)
+            Transform? nearestRailing = railings
+                .OrderBy(railing => Vector3.Distance(railing.transform.position, position))
+                .FirstOrDefault();
+
+            return nearestRailing;
+        }
+
+
+        //string? GetPlayerSurfaceTag(PlayerControllerB? player)
+        //{
+        //    string objName;
+        //    if (player == null) return null;
+        //    if (Physics.Raycast(player.transform.position, Vector3.down, out RaycastHit hit, 2f, StartOfRound.Instance.collidersAndRoomMaskAndDefault))
+        //    {
+        //        objName = hit.collider.gameObject.transform.parent.name;
+        //        if (objName.StartsWith("Girder")) { objName = "Girder"; }
+        //        return hit.collider.gameObject.transform.parent.name;
+        //    }
+        //    return null;
+        //}
+
+        private IEnumerator DelayDoorClose(DoorLock door)
+        {
+            yield return new WaitForSeconds(0.1f); // Example: 0.2 second delay
+            if (LGInstance != null)
+            {
+                door.gameObject.GetComponent<AnimatedObjectTrigger>().TriggerAnimationNonPlayer(LGInstance.useSecondaryAudiosOnAnimatedObjects, overrideBool: true);
+            }
+            door.CloseDoorNonPlayerServerRpc();
         }
 
         EnemyAI? EnemyNearGargoyle()
@@ -579,15 +755,10 @@ namespace LethalGargoyles.src.Enemy
 
                 if (myIndex == switchIndex)
                 {
-                    // Find a player with LESS than their "fair share" of gargoyles
-                    var newTarget = targetCounts
-                        .Where(kvp => kvp.Value < fairShare)
-                        .OrderBy(kvp => kvp.Value)                // Prioritize the least targeted
-                        .ThenBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
-                        .Select(kvp => kvp.Key)
-                        .FirstOrDefault();
+                    // Use FindBestTarget here
+                    var newTarget = FindBestTarget(targetCounts);
 
-                    if (newTarget != null)
+                    if (newTarget != null && newTarget != targetPlayer) // Add check for different target
                     {
                         LogIfDebugBuild($"Changing {myID}'s target from {targetPlayer.playerClientId} to {newTarget.playerClientId}");
                         gargoyleTargets[myID] = newTarget;
@@ -599,16 +770,15 @@ namespace LethalGargoyles.src.Enemy
 
         private PlayerControllerB? FindBestTarget(Dictionary<PlayerControllerB, int> targetCounts)
         {
-            var closestPlayer = targetCounts
-                .Where(kvp => kvp.Value == 0)
-                .OrderBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
+            int fairShare = Mathf.CeilToInt((float)gargoyles.Count / validPlayers.Count);
+
+            // Find a player with LESS than their "fair share" of gargoyles, within awareDist
+            return targetCounts
+                .Where(kvp => kvp.Value < fairShare && Vector3.Distance(transform.position, kvp.Key.transform.position) <= awareDist)
+                .OrderBy(kvp => kvp.Value)
+                .ThenBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
                 .Select(kvp => kvp.Key)
-                .FirstOrDefault() ?? targetCounts
-                    .OrderBy(kvp => kvp.Value)
-                    .ThenBy(kvp => Vector3.Distance(transform.position, kvp.Key.transform.position))
-                    .Select(kvp => kvp.Key)
-                    .FirstOrDefault();
-            return closestPlayer;
+                .FirstOrDefault();
         }
 
         // Helper method to update validPlayers and gargoyles lists
@@ -638,7 +808,9 @@ namespace LethalGargoyles.src.Enemy
 
         bool SetDestinationToHiddenPosition()
         {
-            List<Transform> coverPoints = FindCoverPointsAroundTarget();
+            if (Time.time - pathDelayTimer < 2f && agent.hasPath) { return true; }
+
+            List<Vector3> coverPoints = FindCoverPointsAroundTarget();
             Transform? targetPlayerTransform = targetPlayer?.transform; // Cache targetPlayer transform
 
             if (coverPoints.Count == 0 || targetPlayerTransform == null)
@@ -647,17 +819,24 @@ namespace LethalGargoyles.src.Enemy
             }
 
             // Find the best cover point (prioritize points outside buffer distance)
-            Transform? bestCoverPoint = coverPoints
-                .Where(coverPoint => Vector3.Distance(targetPlayerTransform.position, coverPoint.position) >= bufferDist)
-                .OrderBy(coverPoint => Vector3.Distance(targetPlayerTransform.position, coverPoint.position))
-                .FirstOrDefault() ?? coverPoints
-                    .Where(coverPoint => Vector3.Distance(targetPlayerTransform.position, coverPoint.position) >= aggroRange + 1f)
-                    .OrderBy(coverPoint => Vector3.Distance(targetPlayerTransform.position, coverPoint.position))
-                    .FirstOrDefault();
+            Vector3 bestCoverPoint = coverPoints
+                .Where(coverPoint => Vector3.Distance(targetPlayerTransform.position, coverPoint) >= bufferDist)
+                .OrderBy(coverPoint => Vector3.Distance(targetPlayerTransform.position, coverPoint))
+                .FirstOrDefault(); // Close OrderBy here
 
-            if (bestCoverPoint != null)
+            if (bestCoverPoint == default) // Check for default Vector3 (0, 0, 0)
             {
-                agent.SetDestination(bestCoverPoint.position);
+                bestCoverPoint = coverPoints
+                    .Where(coverPoint => Vector3.Distance(targetPlayerTransform.position, coverPoint) >= aggroRange + 1f)
+                    .OrderBy(coverPoint => Vector3.Distance(targetPlayerTransform.position, coverPoint))
+                    .FirstOrDefault();
+            }
+
+            if (bestCoverPoint != default)
+            {
+                SetDestinationToPosition(bestCoverPoint, true);
+                //LogIfDebugBuild($"Heading to {bestCoverPoint}");
+                pathDelayTimer = Time.time;
                 // LogIfDebugBuild("Found a hiding spot!");
                 return true;
             }
@@ -668,9 +847,9 @@ namespace LethalGargoyles.src.Enemy
             }
         }
 
-        public List<Transform> FindCoverPointsAroundTarget()
+        public List<Vector3> FindCoverPointsAroundTarget()
         {
-            List<Transform> coverPoints = []; // Initialize coverPoints here
+            List<Vector3> coverPoints = [];
             Vector3 targetPlayerPosition = targetPlayer.transform.position;
             Bounds playerBounds = new(targetPlayerPosition, new Vector3(40, 20, 40));
             Bounds gargoyleBounds = new(transform.position, new Vector3(40, 20, 40));
@@ -681,18 +860,31 @@ namespace LethalGargoyles.src.Enemy
 
             foreach (var node in validAINodes)
             {
-                Vector3 pos = node.transform.position;
-                bool isSafe = !StartOfRound.Instance.allPlayerScripts
-                    .Any(player => (playerBounds.Contains(player.transform.position) || gargoyleBounds.Contains(player.transform.position)) &&
-                                   (player.HasLineOfSightToPosition(pos, 60f, 60, 25f) || PathIsIntersectedByLineOfSight(pos, false, true)));
-
-                if (isSafe)
+                for (int i = 0; i < 3; i++)
                 {
-                    coverPoints.Add(node.transform);
+                    Vector3 potentialPos = node.transform.position;
+
+                    Vector2 randomOffset = Random.insideUnitCircle * 3f;
+                    potentialPos += new Vector3(randomOffset.x, 0f, randomOffset.y);
+
+                    potentialPos = ValidateZonePosition(potentialPos);
+                    if (potentialPos != default)
+                    {
+                        bool isSafe = !StartOfRound.Instance.allPlayerScripts
+                            .Any(player => (playerBounds.Contains(player.transform.position) || gargoyleBounds.Contains(player.transform.position)) &&
+                            (player.HasLineOfSightToPosition(potentialPos, 60f, 60, 25f) || PathIsIntersectedByLineOfSight(potentialPos, false, true)) &&
+                            CheckForPath(transform.position, potentialPos));
+
+                        if (isSafe)
+                        {
+                            coverPoints.Add(potentialPos);
+                        }
+                    }
+                    
                 }
             }
 
-            return coverPoints; // Return the list
+            return coverPoints;
         }
 
         private readonly Dictionary<RelativeZone, float> bufferDistances = new()
@@ -724,14 +916,14 @@ namespace LethalGargoyles.src.Enemy
             }
 
             // Define angle ranges for each relative position (clockwise)
-            if (signedAngle >= 337.5f || signedAngle < 22.5f) { LogIfDebugBuild($"Returned Front | Normalized Angle: {signedAngle}"); return RelativeZone.Front; }
-            if (signedAngle >= 22.5f && signedAngle < 67.5f) { LogIfDebugBuild($"Returned FrontRight | Normalized Angle: {signedAngle}"); return RelativeZone.FrontRight; }
-            if (signedAngle >= 67.5f && signedAngle < 112.5f) { LogIfDebugBuild($"Returned Right | Normalized Angle: {signedAngle}"); return RelativeZone.Right; }
-            if (signedAngle >= 112.5f && signedAngle < 157.5f) { LogIfDebugBuild($"Returned BackRight | Normalized Angle: {signedAngle}"); return RelativeZone.BackRight; }
-            if (signedAngle >= 157.5f && signedAngle < 202.5f) { LogIfDebugBuild($"Returned Back | Normalized Angle: {signedAngle}"); return RelativeZone.Back; }
-            if (signedAngle >= 202.5f && signedAngle < 247.5f) { LogIfDebugBuild($"Returned BackLeft | Normalized Angle: {signedAngle}"); return RelativeZone.BackLeft; }
-            if (signedAngle >= 247.5f && signedAngle < 292.5f) { LogIfDebugBuild($"Returned Left | Normalized Angle: {signedAngle}"); return RelativeZone.Left; }
-            if (signedAngle >= 292.5f && signedAngle < 337.5f) { LogIfDebugBuild($"Returned FrontLeft | Normalized Angle: {signedAngle}"); return RelativeZone.FrontLeft; }
+            if (signedAngle >= 337.5f || signedAngle < 22.5f) { return RelativeZone.Front; }
+            if (signedAngle >= 22.5f && signedAngle < 67.5f) { return RelativeZone.FrontRight; }
+            if (signedAngle >= 67.5f && signedAngle < 112.5f) { return RelativeZone.Right; }
+            if (signedAngle >= 112.5f && signedAngle < 157.5f) { return RelativeZone.BackRight; }
+            if (signedAngle >= 157.5f && signedAngle < 202.5f) { return RelativeZone.Back; }
+            if (signedAngle >= 202.5f && signedAngle < 247.5f) { return RelativeZone.BackLeft; }
+            if (signedAngle >= 247.5f && signedAngle < 292.5f) { return RelativeZone.Left; }
+            if (signedAngle >= 292.5f && signedAngle < 337.5f) { return RelativeZone.FrontLeft; }
 
             LogIfDebugBuild("This log shouldn't happen... Returning front anyways.");
             return RelativeZone.Front; // Default case
@@ -750,6 +942,7 @@ namespace LethalGargoyles.src.Enemy
             if (distanceToPlayer > 20f)
             {
                 return targetPlayer.transform.position;
+               
             }
             currentZone = GetRelativeZone(player);
             if (currentZone == RelativeZone.Back ||
@@ -765,7 +958,7 @@ namespace LethalGargoyles.src.Enemy
             nextZoneRight = GetNextZone(currentZone, 1);
             nextZoneLeft = GetNextZone(currentZone, -1);
 
-            LogIfDebugBuild($"Current Zone: {RelativeZoneToString(currentZone)} | Next Right Zone {nextZoneRight} | Next Left Zone {nextZoneLeft} ");
+            //LogIfDebugBuild($"Current Zone: {RelativeZoneToString(currentZone)} | Next Right Zone {nextZoneRight} | Next Left Zone {nextZoneLeft} ");
 
             bool leftPath = CheckZonePath("Left");
             bool rightPath = CheckZonePath("Right");
@@ -801,8 +994,8 @@ namespace LethalGargoyles.src.Enemy
             {
                 nextZone = side == "Right" ? GetNextZone(testZone, 1) : GetNextZone(testZone, -1); // Calculate nextZone inside the loop
 
-                LogIfDebugBuild($"Testing {side} side: {RelativeZoneToString(testZone)} | Position: {RelativeZones[testZone]}");
-                LogIfDebugBuild($"Testing for valid path of {RelativeZoneToString(testZone)} to {RelativeZoneToString(nextZone)}");
+                //LogIfDebugBuild($"Testing {side} side: {RelativeZoneToString(testZone)} | Position: {RelativeZones[testZone]}");
+                //LogIfDebugBuild($"Testing for valid path of {RelativeZoneToString(testZone)} to {RelativeZoneToString(nextZone)}");
 
                 if (nextZone == RelativeZone.Front){ LogIfDebugBuild($"Path calculation failed. nextZone is 'Front''");  return false;} // Don't go around the front of the player
                 if (RelativeZones[testZone] == Vector3.zero) { LogIfDebugBuild($"Path calculation failed. Zone {RelativeZoneToString(testZone)} = Vector3.Zero"); return false;}
@@ -816,7 +1009,7 @@ namespace LethalGargoyles.src.Enemy
                 }
                 else
                 {
-                    LogIfDebugBuild($"Path calculation successful. Path corners: {string.Join(", ", path.corners)}");
+                    //LogIfDebugBuild($"Path calculation successful. Path corners: {string.Join(", ", path.corners)}");
                     pathDist += path.corners.Length > 1
                     ? Vector3.Distance(RelativeZones[testZone], path.corners[1]) // Distance from current zone to first corner
                     : 0f; // No corners, no distance
@@ -843,28 +1036,21 @@ namespace LethalGargoyles.src.Enemy
             RelativeZones.Clear();
             foreach (RelativeZone position in System.Enum.GetValues(typeof(RelativeZone)))
             {
-                Vector3 bufferedPosition = GetBufferedPosition(playerPos, position);
+                Vector3 bufferedPosition = GetBufferedPosition(playerPos, position); // Pass true for randomize
                 RelativeZones.Add(position, bufferedPosition);
-
-                // Log the calculated position for each zone
-                LogIfDebugBuild($"Zone: {RelativeZoneToString(position)}, Position: {bufferedPosition}");
+                //LogIfDebugBuild($"Zone: {RelativeZoneToString(position)}, Position: {bufferedPosition}");
             }
         }
 
         public Vector3 GetBufferedPosition(Vector3 playerPOS, RelativeZone position)
         {
-            // Get the player's forward vector
-            Vector3 playerForward = targetPlayer.transform.forward;
-
-            // Calculate the direction vector for the given relative position
-            Vector3 directionVector = GetDirectionVector(position, playerForward);
-
-            // Get the buffer distance for the given relative position
-            float distance = bufferDistances[position];
-
-            // Calculate the buffered position
-            Vector3 potentialPos = ValidateZonePosition(playerPOS + directionVector * distance);
-            return potentialPos;
+            Vector3 playerForward = targetPlayer.transform.forward; // Get the player's forward vector
+            Vector3 directionVector = GetDirectionVector(position, playerForward); // Calculate the direction vector for the given relative position
+            float distance = bufferDistances[position]; // Get the buffer distance for the given relative position
+            Vector3 potentialPos = playerPOS + directionVector * distance; // Calculate the potential position
+            Vector2 randomOffset = Random.insideUnitCircle * 2f;
+            potentialPos += new Vector3(randomOffset.x, 0f, randomOffset.y);
+            return ValidateZonePosition(potentialPos); // Now validate the position
         }
 
         private Vector3 GetDirectionVector(RelativeZone zone, Vector3 playerForward)
@@ -907,7 +1093,7 @@ namespace LethalGargoyles.src.Enemy
                 return hit.position;
             }
 
-            LogIfDebugBuild("Invalid Position");
+            //LogIfDebugBuild("Invalid Position");
             return Vector3.zero; // Return Vector3.zero to indicate an invalid position
         }
 
@@ -1037,8 +1223,45 @@ namespace LethalGargoyles.src.Enemy
             DoAnimationClientRpc("swingAttack");
             PlayVoice(Utility.AudioManager.attackClips, "attack");
             player.DamagePlayer(2, false, true, CauseOfDeath.Gravity);
-            Vector3 pushDirection = player.transform.forward * 15f;
-            player.externalForceAutoFade = pushDirection;
+            Vector3 pushDirection;
+            if (killTrigger != null)
+            {
+        // 1. Find the nearest railing object
+                Transform? nearestRailing = FindNearestRailing(player.transform.position);
+
+                if (nearestRailing != null)
+                {
+                    LogIfDebugBuild("Pushing Towards Railing");
+
+                    // 2. Calculate the direction towards the railing center
+                    Vector3 pushDirectionXZ = (nearestRailing.position - player.transform.position).normalized;
+
+                    // 3. Add a slight upward component to the push direction
+                    pushDirection = (pushDirectionXZ + Vector3.up * 1f).normalized * 15f;
+                }
+                else
+                {
+                    LogIfDebugBuild("Pushing Towards Kill Trigger");
+
+                    // Calculate the direction towards the kill trigger center
+                    Vector3 pushDirectionXZ = (killTrigger.position - player.transform.position).normalized;
+
+                    // Add a random left or right offset
+                    Vector3 randomSideways = Random.value < 0.5f ? killTrigger.transform.right : -killTrigger.transform.right;
+                    pushDirectionXZ += randomSideways * 1f; // 0.5f is an example offset factor, adjust as needed
+
+                    // Add a slight upward component to the push direction
+                    pushDirection = (pushDirectionXZ + Vector3.up * 2f).normalized * 15f;
+                }
+                pushDirection = pushDirection.normalized * 15f;
+                player.externalForceAutoFade = pushDirection * 1.5f;
+            }
+            else
+            {
+                LogIfDebugBuild("Pushing player forward");
+                pushDirection = player.transform.forward * 15f;
+                player.externalForceAutoFade = pushDirection;
+            }
 
             if (targetPlayer != null)
             {
@@ -1064,7 +1287,6 @@ namespace LethalGargoyles.src.Enemy
             enemyHP -= force;
             if (IsOwner && enemyHP <= 0 && !isEnemyDead)
             {
-                StopCoroutine(searchCoroutine);
                 KillEnemyOnOwnerClient();
             }
         }
@@ -1085,10 +1307,18 @@ namespace LethalGargoyles.src.Enemy
                 collider.enabled = false;
             }
 
+            gargoyleTargets.TryRemove(myID, out _);
+
+            // Remove from playerPushStates
+            foreach (var player in playerPushStates)
             {
-                int randomIndex = UnityEngine.Random.Range(0, Utility.AudioManager.deathClips.Count());
-                TauntClientRpc(Utility.AudioManager.deathClips[randomIndex].name, "death");
+                player.Value.TryRemove(myID, out _);
             }
+
+            int randomIndex = UnityEngine.Random.Range(0, Utility.AudioManager.deathClips.Count());
+            TauntClientRpc(Utility.AudioManager.deathClips[randomIndex].name, "death");
+
+            StopCoroutine(searchCoroutine);
         }
 
         public void PlayVoice(List<AudioClip> clipList, string clipType, AudioClip? clip = null)
