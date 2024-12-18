@@ -3,7 +3,7 @@
 **New Features:**
 
 - **Push Attack:**
-    - Added a new "PushTarget" attack pattern where the gargoyle attempts to push players off catwalks.
+    - Added a new "PushTarget" attack pattern where the gargoyle attempts to push players off edges.
     - Implemented a new cause of death in Coroner for deaths caused by gargoyle pushes.
 - **New Voice Lines:**
     - Added a voice line for the gargoyle push death.
