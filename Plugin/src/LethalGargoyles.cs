@@ -104,6 +104,8 @@ namespace LethalGargoyles.src
             var types = Assembly.GetExecutingAssembly().GetTypes();
             foreach (var type in types)
             {
+                if (type.FullName == "LethalGargoyles.src.SoftDepends.CoronerClass")
+                    continue;
                 var methods = type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
                 foreach (var method in methods)
                 {

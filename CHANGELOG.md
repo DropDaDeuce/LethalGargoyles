@@ -1,3 +1,8 @@
+## v0.4.1 - Hot Fix
+
+- **Bug Fixes:**
+    - Fixed one of the new methods erroring out if Coroner was not installed.
+
 ## v0.4.0 - The Pushy Gargoyle
 
 **New Features:**
