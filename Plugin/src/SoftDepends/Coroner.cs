@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Coroner;
@@ -18,11 +20,9 @@ namespace LethalGargoyles.src.SoftDepends
         {
             try
             {
-                // Invoke the method with the existing 'player' object
-                GargoyleDeath = API.Register("DeathEnemyLGargoyle");
-                GargoylePushDeath = API.Register("DeathEnemyGargoylePush");
-
-                Plugin.Logger.LogInfo($"Gargoyle causes of death registered with Coroner.");
+            GargoyleDeath = API.Register("DeathEnemyLGargoyle");
+            GargoylePushDeath = API.Register("DeathEnemyGargoylePush");
+            Plugin.Logger.LogInfo($"Gargoyle causes of death registered with Coroner.");
             }
             catch (Exception ex)
             {
@@ -35,13 +35,44 @@ namespace LethalGargoyles.src.SoftDepends
             switch (deathType)
             {
                 case "Attack":
-                    Coroner.API.SetCauseOfDeath(player, (AdvancedCauseOfDeath?)GargoyleDeath);
+                    if (GargoyleDeath != null) { SetCauseOfDeath((int)player.playerClientId, (AdvancedCauseOfDeath)GargoyleDeath); }
                     break;
                 case "Push":
-                    Coroner.API.SetCauseOfDeath(player, (AdvancedCauseOfDeath?)GargoylePushDeath);
+                    if (GargoylePushDeath != null) { SetCauseOfDeath((int)player.playerClientId, (AdvancedCauseOfDeath)GargoylePushDeath); }
                     break;
             }
-            
+        }
+
+        internal static void SetCauseOfDeath(int playerId, AdvancedCauseOfDeath cause)
+        {
+            Type advancedDeathTrackerType = typeof(Coroner.Plugin).Assembly.GetType("Coroner.AdvancedDeathTracker");
+            if (advancedDeathTrackerType != null)
+            {
+                // 3. Get the SetCauseOfDeath method
+                MethodInfo? setCauseOfDeathMethod = advancedDeathTrackerType.GetMethod(
+                    "SetCauseOfDeath",
+                    BindingFlags.Public | BindingFlags.Static,
+                    null,
+                    [typeof(int), typeof(Coroner.AdvancedCauseOfDeath), typeof(bool)],
+                    null
+                );
+
+                // 4. Invoke the method
+                setCauseOfDeathMethod?.Invoke(null, [playerId, cause, true]);
+
+                if (setCauseOfDeathMethod != null)
+                {
+#if DEBUG
+                    Plugin.Logger.LogInfo("setCauseOfDeathMethod is null");
+#endif
+                }
+            }
+            else
+            {
+#if DEBUG
+                Plugin.Logger.LogInfo("advancedDeathTrackerType is null");
+#endif
+            }
         }
 
         internal static string? CoronerGetCauseOfDeath(PlayerControllerB player)

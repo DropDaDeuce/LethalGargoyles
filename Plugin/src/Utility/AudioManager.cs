@@ -263,7 +263,7 @@ public class AudioManager : NetworkBehaviour
         writer.WriteValueSafe(audioData.Length);
         writer.WriteBytesSafe(audioData, audioData.Length, 0);
 
-        Plugin.Logger.LogInfo("Sending Clip!");
+        //Plugin.Logger.LogInfo("Sending Clip!");
         NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage("SendLGAudioClip", clientId, writer, NetworkDelivery.ReliableFragmentedSequenced); 
         await Task.Yield();
     }

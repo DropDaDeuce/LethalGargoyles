@@ -9,6 +9,7 @@
     - Added a voice line for the gargoyle push death.
 - **Configuration:**
     - Added a config option to enable or disable the "PushTarget" attack.
+    - Nerfed default value for Aggro Range from 6 to 4.
 
 **Changes:**
 
@@ -19,10 +20,14 @@
     - Improved target selection to distribute targets more evenly among players.
     - Gargoyles now attempt to spread their targets across all players in the same area.
     - Improved base pathfinding to utilize positions near AI nodes instead of directly on them, increasing pathing options and preventing gargoyle stacking.
+    - Decreased speed in the aggressive state.
+    - Introduced caching for AI nodes to avoid redundant lookups.
 - **CoronerClass:**
     - Changed the registry name of the gargoyle push death to avoid conflicts.
 - **Performance:**
     - Optimized `LethalGargoylesAI` for improved performance and readability.
+- **Attack Changes:**
+    - Removed the fear level component from the gargoyle's attack.
 
 **Documentation:**
 

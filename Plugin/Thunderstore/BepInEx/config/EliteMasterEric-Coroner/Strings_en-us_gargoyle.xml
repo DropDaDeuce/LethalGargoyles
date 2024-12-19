@@ -23,9 +23,9 @@
         <DeathEnemyLGargoyle text="Must have been afk to die to a Gargoyle." />
         <DeathEnemyLGargoyle text="Got spanked by a Gargoyle." />
 		
-		<DeathEnemyLGargoylePush text="Was pushed by a Gargoyle." />
-		<DeathEnemyLGargoylePush text="Sparta kicked off the edge." />
-		<DeathEnemyLGargoylePush text="Plummeted at the sight of a gargoyle." />
-		<DeathEnemyLGargoylePush text="This yellow-bellied ninny saw a Gargoyle and fell." />
+		<DeathEnemyGargoylePush text="Was pushed by a Gargoyle." />
+		<DeathEnemyGargoylePush text="Sparta kicked off the edge." />
+		<DeathEnemyGargoylePush text="Plummeted at the sight of a gargoyle." />
+		<DeathEnemyGargoylePush text="This yellow-bellied ninny saw a Gargoyle and fell." />
     </strings>
 </base>
