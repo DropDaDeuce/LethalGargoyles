@@ -10,6 +10,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.Threading.Tasks;
 using System.Threading;
+using LethalGargoyles.src.Config;
 
 namespace LethalGargoyles.src.Utility;
 public class AudioManager : NetworkBehaviour
@@ -26,7 +27,7 @@ public class AudioManager : NetworkBehaviour
     public static List<AudioClip> classClips = [];
     public static AudioManager? Instance;
 
-    public static Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
+    //public static Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
     public static Dictionary<string, List<string>> AudioClipFilePaths { get; private set; } = [];
     private readonly Dictionary<ulong, bool> clientReady = [];
 
@@ -57,9 +58,8 @@ public class AudioManager : NetworkBehaviour
         if (IsHost)
         {
             Plugin.Logger.LogInfo($"Creating Audio Clip List");
-            LoadClipList();
+            LoadClipList(Plugin.defaultAudioClipFilePaths);
             LoadAudioClipsFromConfig();
-
 #if DEBUG 
             Plugin.Instance.StartCoroutine(LogClipCounts());
 #endif
@@ -157,7 +157,7 @@ public class AudioManager : NetworkBehaviour
             foreach (string fileName in fileNames)
             {
                 string clipName = Path.GetFileNameWithoutExtension(fileName);
-                if (AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry) && configEntry.Value)
+                if (PluginConfig.AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry) && configEntry.Value)
                 {
                     byte[]? audioData = AudioFileToByteArray(fileName);
                     if (audioData?.Length > 512000)
@@ -319,7 +319,7 @@ public class AudioManager : NetworkBehaviour
             yield break;
     }
 
-    public void LoadAudioClipsFromConfig()
+    private void LoadAudioClipsFromConfig()
     {
         foreach (var kvp in AudioClipFilePaths)
         {
@@ -330,7 +330,8 @@ public class AudioManager : NetworkBehaviour
             foreach (string fileName in fileNames)
             {
                 string clipName = Path.GetFileNameWithoutExtension(fileName);
-                if (AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry) && configEntry.Value)
+
+                if (PluginConfig.AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry) && configEntry.Value)
                 {
                     StartCoroutine(LoadAudioClip(fileName, category));
                 }
@@ -390,50 +391,17 @@ public class AudioManager : NetworkBehaviour
         };
     }
 
-    public void LoadClipList()
+    // In your AudioManager class
+    public void LoadClipList(Dictionary<string, List<string>> defaultAudioClipFilePaths)
     {
-        // Use a dictionary to store the config entries for audio clips
-        AudioClipFilePaths = new Dictionary<string, List<string>>
-            {
-                { "General", [] },
-                { "Aggro", [] },
-                { "Enemy", [] },
-                { "PlayerDeath", [] },
-                { "GargoyleDeath", [] },
-                { "PriorDeath", [] },
-                { "Attack", [] },
-                { "Hit", [] }
-            };
-
-        if (Plugin.Instance.IsEmployeeClassesLoaded)
-        {
-            AudioClipFilePaths.Add("Class", []);
-        }
-
+        AudioClipFilePaths = defaultAudioClipFilePaths; // Start with the defaults
         foreach (var cat in AudioClipFilePaths)
         {
             string category = cat.Key;
             List<string> fileNames = cat.Value;
 
-            // Get files from both folders
-            FileInfo[] defaultFiles = GetMP3Files(category, "Voice Lines");
+            // Get custom files
             FileInfo[] customFiles = GetMP3Files(category, "Custom Voice Lines");
-
-            if (category == "PriorDeath" && Plugin.Instance.IsCoronerLoaded)
-            {
-                FileInfo[] coronerDefaultFiles = GetMP3Files("Coroner", "Voice Lines");
-                FileInfo[] coronerCustomFiles = GetMP3Files("Coroner", "Custom Voice Lines");
-
-                // Add Coroner files to the existing arrays
-                defaultFiles = [.. defaultFiles, .. coronerDefaultFiles];
-                customFiles = [.. customFiles, .. coronerCustomFiles];
-            }
-
-            // Add default files first
-            foreach (FileInfo file in defaultFiles)
-            {
-                fileNames.Add(file.FullName);
-            }
 
             // Add custom files, replacing any with the same name as default files
             foreach (FileInfo customFile in customFiles)
@@ -441,52 +409,98 @@ public class AudioManager : NetworkBehaviour
                 string customFileName = Path.GetFileNameWithoutExtension(customFile.FullName);
                 bool replaced = false;
 
-                // Check if a default file with the same name exists
                 for (int i = 0; i < fileNames.Count; i++)
                 {
                     string defaultFileName = Path.GetFileNameWithoutExtension(fileNames[i]);
                     if (customFileName == defaultFileName)
                     {
-                        fileNames[i] = customFile.FullName; // Replace the default file
+                        fileNames[i] = customFile.FullName;
                         replaced = true;
                         break;
                     }
                 }
 
-                // If no matching default file was found, add the custom file
                 if (!replaced)
                 {
                     fileNames.Add(customFile.FullName);
                 }
             }
-        }
 
-        // 2. Bind config entries and load audio clips
-
-        foreach (var cat in AudioClipFilePaths)
-        {
-            string category = cat.Key;
-            List<string> fileNames = cat.Value;
-
-            foreach (string fileName in fileNames)
+            // Handle Coroner files if Coroner mod is loaded
+            if (category == "PriorDeath" && Plugin.Instance.IsCoronerLoaded)
             {
-                string clipName = Path.GetFileNameWithoutExtension(fileName);
+                FileInfo[] coronerDefaultFiles = GetMP3Files("Coroner", "Voice Lines");
+                FileInfo[] coronerCustomFiles = GetMP3Files("Coroner", "Custom Voice Lines");
 
-                // Create config entry if it doesn't exist
-                if (!AudioClipEnableConfig.ContainsKey(clipName))
+                // Add Coroner default files
+                foreach (FileInfo file in coronerDefaultFiles)
                 {
-                    AudioClipEnableConfig[clipName] = Plugin.Instance.Config.Bind(
-                        "Audio." + category,
-                        $"Enable {clipName}",
-                        true,
-                        $"Enable the audio clip: {clipName}"
-                    );
+                    fileNames.Add(file.FullName);
+                }
+
+                // Add Coroner custom files, replacing defaults if necessary
+                foreach (FileInfo customFile in coronerCustomFiles)
+                {
+                    string customFileName = Path.GetFileNameWithoutExtension(customFile.FullName);
+                    bool replaced = false;
+
+                    for (int i = 0; i < fileNames.Count; i++)
+                    {
+                        string defaultFileName = Path.GetFileNameWithoutExtension(fileNames[i]);
+                        if (customFileName == defaultFileName)
+                        {
+                            fileNames[i] = customFile.FullName;
+                            replaced = true;
+                            break;
+                        }
+                    }
+
+                    if (!replaced)
+                    {
+                        fileNames.Add(customFile.FullName);
+                    }
+                }
+            }
+
+            // Handle EmployeeClasses files if EmployeeClasses mod is loaded
+            if (Plugin.Instance.IsEmployeeClassesLoaded && category == "Class")
+            {
+                FileInfo[] classDefaultFiles = GetMP3Files("EmployeeClass", "Voice Lines");
+                FileInfo[] classCustomFiles = GetMP3Files("EmployeeClass", "Custom Voice Lines");
+
+                // Add EmployeeClasses default files
+                foreach (FileInfo file in classDefaultFiles)
+                {
+                    fileNames.Add(file.FullName);
+                }
+
+                // Add EmployeeClasses custom files, replacing defaults if necessary
+                foreach (FileInfo customFile in classCustomFiles)
+                {
+                    string customFileName = Path.GetFileNameWithoutExtension(customFile.FullName);
+                    bool replaced = false;
+
+                    for (int i = 0; i < fileNames.Count; i++)
+                    {
+                        string defaultFileName = Path.GetFileNameWithoutExtension(fileNames[i]);
+                        if (customFileName == defaultFileName)
+                        {
+                            fileNames[i] = customFile.FullName;
+                            replaced = true;
+                            break;
+                        }
+                    }
+
+                    if (!replaced)
+                    {
+                        fileNames.Add(customFile.FullName);
+                    }
                 }
             }
         }
     }
 
-    private FileInfo[] GetMP3Files(string type, string folderName)
+    public static FileInfo[] GetMP3Files(string type, string folderName)
     {
         DirectoryInfo directoryInfo;
 

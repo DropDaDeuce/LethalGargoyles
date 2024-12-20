@@ -9,6 +9,8 @@ using LethalGargoyles.src.Config;
 using LethalLib;
 using System.Diagnostics;
 using System;
+using LethalGargoyles.src.Utility;
+using System.Collections.Generic;
 
 namespace LethalGargoyles.src
 {
@@ -27,6 +29,8 @@ namespace LethalGargoyles.src
         public static AssetBundle? ModAssets;
         public static string? CustomAudioFolderPath { get; private set; }
 
+        public static Dictionary<string, List<string>> defaultAudioClipFilePaths = [];
+
         [Conditional("DEBUG")]
         public void LogIfDebugBuild(string text)
         {
@@ -40,6 +44,7 @@ namespace LethalGargoyles.src
             Logger = base.Logger;
             BoundConfig = new PluginConfig(base.Config);
             InitializeNetworkBehaviours();
+
             Instance = this;
             var bundleName = "gargoyleassets";
             ModAssets = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Info.Location), bundleName));
@@ -95,6 +100,9 @@ namespace LethalGargoyles.src
                 SoftDepends.CoronerClass.Init();
             }
 
+            defaultAudioClipFilePaths = GetDefaultAudioClipFilePaths();
+            BoundConfig.InitializeAudioClipConfigs(defaultAudioClipFilePaths);
+
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
         }
 
@@ -128,6 +136,62 @@ namespace LethalGargoyles.src
             {
                 return false;
             }
+        }
+
+        // In your Plugin class
+        private Dictionary<string, List<string>> GetDefaultAudioClipFilePaths()
+        {
+            Dictionary<string, List<string>> audioClipFilePaths = new()
+            {
+                { "General", [] },
+                { "Aggro", [] },
+                { "Enemy", [] },
+                { "PlayerDeath", [] },
+                { "GargoyleDeath", [] },
+                { "PriorDeath", [] },
+                { "Attack", [] },
+                { "Hit", [] }
+            };
+
+            if (Plugin.Instance.IsEmployeeClassesLoaded)
+            {
+                audioClipFilePaths.Add("Class", []);
+            }
+
+            foreach (var cat in audioClipFilePaths)
+            {
+                string category = cat.Key;
+                List<string> fileNames = cat.Value;
+
+                FileInfo[] defaultFiles = AudioManager.GetMP3Files(category, "Voice Lines");
+
+                foreach (FileInfo file in defaultFiles)
+                {
+                    fileNames.Add(file.FullName);
+                }
+
+                // Add Coroner default files if Coroner mod is loaded
+                if (category == "PriorDeath" && Plugin.Instance.IsCoronerLoaded)
+                {
+                    FileInfo[] coronerDefaultFiles = AudioManager.GetMP3Files("Coroner", "Voice Lines");
+                    foreach (FileInfo file in coronerDefaultFiles)
+                    {
+                        fileNames.Add(file.FullName);
+                    }
+                }
+
+                // Add EmployeeClasses default files if EmployeeClasses mod is loaded
+                if (Plugin.Instance.IsEmployeeClassesLoaded && category == "Class")
+                {
+                    FileInfo[] classDefaultFiles = AudioManager.GetMP3Files("EmployeeClass", "Voice Lines");
+                    foreach (FileInfo file in classDefaultFiles)
+                    {
+                        fileNames.Add(file.FullName);
+                    }
+                }
+            }
+
+            return audioClipFilePaths;
         }
     }
 }

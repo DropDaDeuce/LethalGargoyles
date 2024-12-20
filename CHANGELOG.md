@@ -1,3 +1,20 @@
+## v0.4.2
+
+**Changes:**
+
+- **Gargoyle AI:**
+    - Improved gargoyle AI responsiveness.
+    - Optimized the process of finding nearby railings.
+    - Refined targeting logic for improved efficiency.
+- **Performance:**
+    - Significantly improved gargoyle performance through various optimizations, including:
+        - Replacing LINQ methods with more efficient loops.
+        - Utilizing optimized distance calculations.
+        - Caching frequently accessed values.
+        - Reducing redundant function calls.
+
+These changes enhance the gargoyle's performance and responsiveness, leading to smoother gameplay.
+
 ## v0.4.1 - Hot Fix
 
 - **Bug Fixes:**
