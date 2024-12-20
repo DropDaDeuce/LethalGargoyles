@@ -105,7 +105,7 @@ namespace LethalGargoyles.src.Enemy
         private float distanceToPlayerSqr = 0f;
         private float distanceToClosestPlayerSqr = 0f;
         private string? lastEnemy = null;
-        private bool isAllPlayersDead = false;
+        //private bool isAllPlayersDead = false;
         private bool isSeen;
         private bool canSeePlayer;
         private bool targetSeesGargoyle;
@@ -1608,12 +1608,12 @@ namespace LethalGargoyles.src.Enemy
             var players = StartOfRound.Instance.allPlayerScripts; // Cache player list
 
             // Cache gargoylePoints array for efficiency
-            Vector3[] gargoylePoints = {
+            Vector3[] gargoylePoints = [
                 t.position + Vector3.up * 0.25f, // bottom
                 t.position + Vector3.up * 1.3f, // top
                 t.position + Vector3.left * 1.6f, // Left shoulder
                 t.position + Vector3.right * 1.6f, // Right shoulder
-            };
+            ];
 
             foreach (var player in players)
             {
