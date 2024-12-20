@@ -252,12 +252,14 @@ The gargoyle's taunts are categorized as follows:
 </details>
 
 ## To Do
- - Add "Action" taunts. They will trigger based on some of your actions. - Idea submitted by Sniker
-    - Pick up an annoying item.
-    - Near a ledge
-    - Kill another enemy
-    - Getting lost
- - Find more ways for him to be mischievous. (Keeping the theme of him trying to stay hidden)
+- Create system to track specific actions gargoyles can use to taunt players.
+	- Kill enemy.
+	- Pick up certain scrap items.
+	- Stay too long in the facility.
+- 1 more taunt for each employee class.
+- Add gargoyle scrap that taunts (probably lower volume than the monster).
+- **MAYBE** add Mirage integration. Gargoyle "Repeats" voice lines in a mocking manner. (Depends on difficulty and time to implement)
+- Thinking of new ways to make the Gargoyle michievous without it being overbearing.
 
 ### Credits:
  - **Evaisa** for creating LethalLib.

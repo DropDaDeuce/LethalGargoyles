@@ -1,2 +1,8 @@
 Gargoyle To Do:
-- swing animation not always playing
+- Create system to track specific actions gargoyles can use to taunt players.
+	- Kill enemy.
+	- Pick up certain scrap items.
+	- Stay too long in the facility.
+- 1 more taunt for each employee class.
+- Add gargoyle scrap that taunts (probably lower volume than the monster).
+- Mirage integration. Gargoyle "Repeats" voice lines in a mocking manner.
