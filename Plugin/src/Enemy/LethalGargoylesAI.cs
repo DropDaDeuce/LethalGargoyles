@@ -18,6 +18,8 @@ namespace LethalGargoyles.src.Enemy
     [HarmonyPatch(typeof(DoorLock), "OnTriggerStay")]
     public class HarmonyDoorPatch
     {
+        private static readonly FieldInfo enemyDoorMeterField = typeof(DoorLock).GetField("enemyDoorMeter", BindingFlags.NonPublic | BindingFlags.Instance);
+
         [HarmonyPostfix]
         static void PostFixOnTriggerStay(DoorLock __instance, Collider other)
         {
@@ -28,9 +30,6 @@ namespace LethalGargoyles.src.Enemy
 
             if (other.GetComponent<EnemyAICollisionDetect>().mainScript is LethalGargoylesAI gargoyles)
             {
-                // Using reflection to get enemyDoorMeter
-                FieldInfo enemyDoorMeterField = typeof(DoorLock).GetField("enemyDoorMeter", BindingFlags.NonPublic | BindingFlags.Instance);
-
                 if (enemyDoorMeterField != null)
                 {
                     float enemyDoorMeter = (float)enemyDoorMeterField.GetValue(__instance);
@@ -174,6 +173,12 @@ namespace LethalGargoyles.src.Enemy
             BackLeft,
             Left,
             FrontLeft
+        }
+
+        public struct RelativeZoneData
+        {
+            public Vector3 Position;
+            public float Distance;
         }
 
         [Conditional("DEBUG")]
@@ -322,7 +327,7 @@ namespace LethalGargoyles.src.Enemy
 
                 if (!isOutside != targetPlayer.isInsideFactory || !targetPlayer.isPlayerControlled || targetPlayer.isPlayerDead || distanceToPlayerSqr > awareDistSqr)
                 {
-                    LogIfDebugBuild($"Player Status: isInsideFactory = {targetPlayer.isInsideFactory}, isPlayerControlled = {targetPlayer.isPlayerControlled}, isPlayerDead = {targetPlayer.isPlayerDead}");
+                    //LogIfDebugBuild($"Player Status: isInsideFactory = {targetPlayer.isInsideFactory}, isPlayerControlled = {targetPlayer.isPlayerControlled}, isPlayerDead = {targetPlayer.isPlayerDead}");
                     targetPlayer = null;
                     SwitchToBehaviourClientRpc((int)State.SearchingForPlayer);
                 }
@@ -365,7 +370,7 @@ namespace LethalGargoyles.src.Enemy
 
             foreach (var player in playerPushStates)
             {
-                if (player.Key.playerUsername != targetPlayer.playerUsername)
+                if (!player.Key.playerUsername.Equals(targetPlayer.playerUsername))
                 {
                     player.Value.TryRemove(myID, out _);
                 }
@@ -374,12 +379,9 @@ namespace LethalGargoyles.src.Enemy
 
         private void HandlePushStage()
         {
-            if (pushStage < 1)
+            if (pushStage < 1 && distanceToClosestPlayerSqr <= awareDistSqr)
             {
-                if (distanceToClosestPlayerSqr <= awareDistSqr)
-                {
-                    HandleAggroAndPush();
-                }
+                HandleAggroAndPush();
             }
         }
 
@@ -707,10 +709,10 @@ namespace LethalGargoyles.src.Enemy
 
         private void CacheKillTriggers()
         {
-            GameObject[] allObjects = GameObject.FindObjectsOfType<GameObject>();
+            var allObjects = GameObject.FindObjectsOfType<GameObject>();
             cachedKillTriggers.Clear();
 
-            foreach (GameObject obj in allObjects)
+            foreach (var obj in allObjects)
             {
                 if (obj.name.StartsWith("KillTrigger") && obj.TryGetComponent<BoxCollider>(out _))
                 {
@@ -723,80 +725,24 @@ namespace LethalGargoyles.src.Enemy
 
         private void CheckAndRefreshAINodes()
         {
-            //LogIfDebugBuild($"Node Counts: Outside = {cachedOutsideAINodes.Count}, Inside = {cachedInsideAINodes.Count}, All = {cachedAllAINodes.Count}");
+            RefreshNodesIfNull(cachedOutsideAINodes, RoundManager.Instance.outsideAINodes, "outside");
+            RefreshNodesIfNull(cachedInsideAINodes, RoundManager.Instance.insideAINodes, "inside");
+            RefreshNodesIfNull(cachedAllAINodes, allAINodes, "all");
+        }
 
-            bool nullNodesFound = false;
+        private void RefreshNodesIfNull(List<GameObject> cachedNodes, IEnumerable<GameObject> sourceNodes, string nodeType)
+        {
+            bool nullNodesFound = cachedNodes.Any(node => node == null);
 
-            // Check for null nodes in cachedOutsideAINodes
-            for (int i = 0; i < cachedOutsideAINodes.Count; i++)
+            if (nullNodesFound && sourceNodes.Any())
             {
-                if (cachedOutsideAINodes[i] == null)
-                {
-                    nullNodesFound = true;
-                    break;
-                }
-            }
-
-            if (nullNodesFound && RoundManager.Instance.outsideAINodes.Count() != 0)
-            {
-                // Refresh the cached lists if any null nodes are found
-                LogIfDebugBuild("Null Nodes Found. Refreshing outside nodes list");
-
-                cachedOutsideAINodes.Clear();
-                foreach (var node in RoundManager.Instance.outsideAINodes)
+                LogIfDebugBuild($"Null Nodes Found. Refreshing {nodeType} nodes list");
+                cachedNodes.Clear();
+                foreach (var node in sourceNodes)
                 {
                     if (node != null)
                     {
-                        cachedOutsideAINodes.Add(node);
-                    }
-                }
-            }
-
-            nullNodesFound = false;
-            // Check for null nodes in cachedInsideAINodes
-            for (int i = 0; i < cachedInsideAINodes.Count; i++)
-            {
-                if (cachedInsideAINodes[i] == null)
-                {
-                    nullNodesFound = true;
-                    break;
-                }
-            }
-
-            if (nullNodesFound && RoundManager.Instance.insideAINodes.Count() != 0)
-            {
-                LogIfDebugBuild("Null Nodes Found. Refreshing inside nodes list");
-                cachedInsideAINodes.Clear();
-                foreach (var node in RoundManager.Instance.insideAINodes)
-                {
-                    if (node != null)
-                    {
-                        cachedInsideAINodes.Add(node);
-                    }
-                }
-            }
-
-            nullNodesFound = false;
-            // Check for null nodes in cachedAllAINodes
-            for (int i = 0; i < cachedAllAINodes.Count; i++)
-            {
-                
-                if (cachedAllAINodes[i] == null)
-                {
-                    nullNodesFound = true;
-                    break;
-                }
-            }
-
-            if (nullNodesFound && allAINodes.Count() != 0)
-            {
-                LogIfDebugBuild("Null Nodes Found. Refreshing all nodes list");
-                cachedAllAINodes.Clear();
-                foreach (var node in allAINodes)
-                {
-                    if (node != null)
-                    {
-                        cachedAllAINodes.Add(node);
+                        cachedNodes.Add(node);
                     }
                 }
             }
