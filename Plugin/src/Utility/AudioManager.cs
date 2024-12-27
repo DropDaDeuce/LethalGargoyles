@@ -11,6 +11,8 @@ using UnityEngine.Networking;
 using System.Threading.Tasks;
 using System.Threading;
 using LethalGargoyles.src.Config;
+using GameNetcodeStuff;
+using static LethalGargoyles.src.Enemy.LethalGargoylesAI.PlayerActivityTracker;
 
 namespace LethalGargoyles.src.Utility;
 public class AudioManager : NetworkBehaviour
@@ -25,6 +27,7 @@ public class AudioManager : NetworkBehaviour
     public static List<AudioClip> attackClips = [];
     public static List<AudioClip> hitClips = [];
     public static List<AudioClip> classClips = [];
+    public static List<AudioClip> playerClips = [];
     public static AudioManager? Instance;
 
     //public static Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
@@ -79,6 +82,7 @@ public class AudioManager : NetworkBehaviour
         attackClips.Clear();
         hitClips.Clear();
         classClips.Clear();
+        playerClips.Clear();
 
         if (IsServer)
         {
@@ -101,6 +105,7 @@ public class AudioManager : NetworkBehaviour
         LogIfDebugBuild("Loaded gargoyle class taunt clips count: " + classClips.Count);
         LogIfDebugBuild("Loaded gargoyle voice attack clips count: " + attackClips.Count);
         LogIfDebugBuild("Loaded gargoyle voice hit clips count: " + hitClips.Count);
+        LogIfDebugBuild("Loaded gargoyle player clips count: " + hitClips.Count);
     }
 
     private void OnClientConnectedCallback(ulong clientId)
@@ -387,6 +392,7 @@ public class AudioManager : NetworkBehaviour
             "Class" => classClips,
             "Attack" => attackClips,
             "Hit" => hitClips,
+            "Player" => playerClips,
             _ => throw new ArgumentException($"Invalid audio clip category: {category}"),// Or throw an exception
         };
     }
@@ -545,6 +551,9 @@ public class AudioManager : NetworkBehaviour
                 return directoryInfo.GetFiles("*.*");
             case "Hit":
                 directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Combat Dialog", "Hit"));
+                return directoryInfo.GetFiles("*.*");
+            case "Player":
+                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Player"));
                 return directoryInfo.GetFiles("*.*");
         }
         return [];

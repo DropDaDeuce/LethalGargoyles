@@ -81,6 +81,7 @@ namespace LethalGargoyles.src
             Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - Player Death"));
             Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - Prior Death", "Coroner"));
             Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - EmployeeClass"));
+            Directory.CreateDirectory(Path.Combine(CustomAudioFolderPath, "Taunt - SteamIDs"));
 
             var LethalGargoyle = ModAssets.LoadAsset<EnemyType>("LethalGargoyle");
             var LethalGargoyleTN = ModAssets.LoadAsset<TerminalNode>("LethalGargoyleTN");

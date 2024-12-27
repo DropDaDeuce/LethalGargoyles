@@ -1,0 +1,146 @@
+﻿using GameNetcodeStuff;
+using HarmonyLib;
+using static LethalGargoyles.src.Enemy.LethalGargoylesAI.PlayerActivityTracker;
+using static LethalGargoyles.src.Enemy.LethalGargoylesAI;
+using Unity.Netcode;
+using UnityEngine;
+using LethalGargoyles.src.Enemy;
+using System.Reflection;
+using System.Collections.Generic;
+
+namespace LethalGargoyles.src.Patch
+{
+    [HarmonyPatch(typeof(DoorLock), "OnTriggerStay")]
+    public class HarmonyDoorPatch
+    {
+        private static readonly FieldInfo enemyDoorMeterField = typeof(DoorLock).GetField("enemyDoorMeter", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        [HarmonyPostfix]
+        static void PostFixOnTriggerStay(DoorLock __instance, Collider other)
+        {
+            if (other == null || other.GetComponent<EnemyAICollisionDetect>() == null || other.GetComponent<EnemyAICollisionDetect>().mainScript == null)
+            {
+                return;
+            }
+
+            if (other.GetComponent<EnemyAICollisionDetect>().mainScript is LethalGargoylesAI gargoyles)
+            {
+                if (enemyDoorMeterField != null)
+                {
+                    float enemyDoorMeter = (float)enemyDoorMeterField.GetValue(__instance);
+                    if (enemyDoorMeter <= 0f && gargoyles.currentDoor == null) // Check if currentDoor is null
+                    {
+                        gargoyles.currentDoor = __instance;  // Assign the door
+                        gargoyles.lastDoorCloseTime = Time.time; // Reset the timer
+                    }
+                }
+                else
+                {
+                    Plugin.Logger.LogWarning("enemyDoorMeter field not found in DoorLock.");
+                }
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(EnemyAI), "HitEnemy")]
+    public class KillEnemyPatch
+    {
+        [HarmonyPostfix]
+        static void Postfix(EnemyAI __instance, PlayerControllerB? playerWhoHit)
+        {
+            if (playerWhoHit != null && __instance.isEnemyDead)
+            {
+                UpdatePlayerActivity(playerWhoHit, PlayerActivityType.KilledEnemy, __instance.enemyType.enemyName);
+                Plugin.Instance.LogIfDebugBuild("Player killed enemy: " + __instance.enemyType.enemyName);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerControllerB), "GrabObjectServerRpc")]
+    public class GrabObjectServerRpcPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix(PlayerControllerB __instance, ref NetworkObjectReference grabbedObject)
+        {
+            if (!__instance.IsServer) { return; }
+            if (grabbedObject.TryGet(out var networkObject) && networkObject.GetComponentInChildren<GrabbableObject>() is GrabbableObject grabbableObject)
+            {
+                string itemName = grabbableObject.itemProperties.itemName;
+
+                // Check if the item name is in the trackedItems set
+                if (trackedItems.Contains(itemName))
+                {
+                    // Update player activity
+                    UpdatePlayerActivity(__instance, PlayerActivityType.PickedUpItem, grabbableObject.itemProperties.itemName);
+                    Plugin.Instance.LogIfDebugBuild(__instance.playerUsername + " picked up item: " + grabbableObject.itemProperties.itemName);
+                }
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerControllerB), "SetObjectAsNoLongerHeld")]
+    public class SetObjectAsNoLongerHeldPatch
+    {
+        [HarmonyPostfix]
+        public static void Postfix(PlayerControllerB __instance, GrabbableObject dropObject)
+        {
+            if (!__instance.IsServer) { return; }
+            string itemName = dropObject.itemProperties.itemName;
+            // Check if the item name is in the trackedItems set
+            if (trackedItems.Contains(itemName))
+            {
+                // Update player activity
+                RemoveActivity(__instance, PlayerActivityType.PickedUpItem, itemName);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerControllerB), "Update")]
+    public class PlayerInFacilityPatch
+    {
+        private static readonly Dictionary<PlayerControllerB, float> playerEnterTimes = [];
+        private static readonly Dictionary<PlayerControllerB, float> lastRanTimes = []; // Dictionary to store lastRan time for each player
+        private const float MinimumTimeInFacility = 5f;
+        private const float delay = 1f;
+
+        [HarmonyPostfix]
+        static void Postfix(PlayerControllerB __instance)
+        {
+            float lastRan = lastRanTimes.TryGetValue(__instance, out float lastRanTime) ? lastRanTime : 0f;
+            if (Time.time - lastRan > delay)
+            {
+                if (__instance.isPlayerControlled && __instance.isInsideFactory && !__instance.isPlayerDead)
+                {
+                    Plugin.Instance.LogIfDebugBuild(__instance.playerUsername + " is inside the facility.");
+                    // Record entry time if not already recorded
+                    if (!playerEnterTimes.ContainsKey(__instance))
+                    {
+                        playerEnterTimes[__instance] = Time.time;
+                    }
+                    else
+                    {
+                        // Check if the player has been inside for the minimum duration
+                        float timeEntered = playerEnterTimes[__instance];
+                        float timeInFacility = Time.time - timeEntered;
+
+                        if (timeInFacility >= MinimumTimeInFacility * 60) // Convert minutes to seconds
+                        {
+                            UpdatePlayerActivity(__instance, PlayerActivityType.InFacility, "InFacilityTime", timeInFacility);
+                            Plugin.Instance.LogIfDebugBuild(__instance.playerUsername + " has been in the facility for " + timeInFacility + " seconds.");
+                        }
+                    }
+                }
+                else
+                {
+                    if (playerEnterTimes.ContainsKey(__instance))
+                    {
+                        // Remove player from the dictionary when they leave the facility
+                        playerEnterTimes.Remove(__instance);
+                    }
+                    RemoveActivity(__instance, PlayerActivityType.InFacility);
+                }
+                lastRanTimes[__instance] = Time.time;
+            }
+        }
+    }
+}

@@ -4,10 +4,10 @@ This mischievous gargoyle's goal is to follow you around and annoy you with his 
 
 **Features:**
 
-* **Voiced Gargoyle:**  Features the voice of the modder, with over 140 unique voice lines (and more to come!).
+* **Voiced Gargoyle:**  Features the voice of the modder, with 160+ unique voice lines (and more to come!).
 * **Dynamic Behavior:** The gargoyle tries to stay close while remaining hidden, but will become aggressive if you get too close.
 * **Varied Taunts:**  Includes a wide range of taunts for different situations, including general taunts, aggro responses, death reactions, and more.
-* **Customizable Voice Lines:**  Add or replace voice lines with your own custom OGG files.
+* **Customizable Voice Lines:**  Add or replace voice lines with your own custom OGG files. (Details on how are below)
 * **Configuration Options:** Disable specific voice lines or adjust other settings through the mod's configuration file.
 
 <details>
@@ -51,6 +51,7 @@ Voice lines are organized into the following categories:
 - Taunt - Player Death
 - Taunt - Prior Death
 - Taunt - EmployeeClass (Requires the Employee Classes mod)
+- Taunt - SteamIDs
 
 **3.  Naming Conventions**
 
@@ -61,6 +62,12 @@ Voice lines are organized into the following categories:
 **4. Disabling Voice Lines**
 
 - If you want to disable a specific voice line, you can do so through the mod's configuration file.
+
+**5. Steam ID Taunts**
+
+- If you want to add a custom taunt for a specific Steam ID, you can do so by naming the OGG file "[SteamID]_[optional].ogg" (e.g., "76561198012345678_ConorTaunt.ogg"). The Gargoyle will play this custom taunt when the player with the specified Steam ID is the target.
+- There is a 5% chance that the Gargoyle will play a Steam ID taunt.
+    - If the player has multiple Steam ID taunts, the Gargoyle will randomly choose one to play.
 
 </details>
 
@@ -76,6 +83,7 @@ The gargoyle's taunts are categorized as follows:
 * Prior Death Vanilla
 * Prior Death Coroner
 * Employee Classes
+* Activity
 
 <details>
 <summary>General (General taunts that play randomly during gameplay)</summary>
@@ -153,6 +161,7 @@ The gargoyle's taunts are categorized as follows:
 <pre>"Hey! Employee! Ever been dissolved by a slime?"</pre>
 <pre>"That's one scary butler! I'm glad I'm not you! Hahahaha!"</pre>
 <pre>"This one eats employees! I like it already!"</pre>
+<pre>"Another Gargoyle joins the employee hunt! Luckily this employee sucks, should be an easy kill!"</pre>
 </details>
 
 <details>
@@ -251,11 +260,32 @@ The gargoyle's taunts are categorized as follows:
 <pre>"Just a regular Employee, eh? Nothin' special... just like yer face! Hahahaha!"</pre>
 </details>
 
+<details>
+<summary>Activity (Taunts the target based on several hardcoded actions)</summary>
+<pre>"You think that's a key to the facility!? That's a key to your death! Hahahaha!"</pre>
+<pre>"Can't find yer way out, can ye? Don't worry, I'll be here to watch ye die! Hahahaha!"</pre>
+<pre>"Need to find the way out, do ye? Just keep wanderin', maybe ye'll stumble upon a friendly monster... or a bottomless pit! Hahahaha!"</pre>
+<pre>"Ye killed another Gargoyle, did ye? He must have been deathly ill to die to a weakling like you!"</pre>
+<pre>"So ye managed to snap his neck, eh? I could've done it with my little finger! Amateur."</pre>
+<pre>"Ye killed a Butler? Ye must feel pretty high and mighty killing a harmless old man!"</pre>
+<pre>"Think yer tough because ye squashed a bug? Yer more pathetic than the employee who sits at the ship and watches everyone die!"</pre>
+<pre>"What kind of person kills a little girl? You digust me."</pre>
+<pre>"Poor bug just wanted some shiny scrap, and ye killed em! I knew yer the worst employee, but yer also a terrible person!"</pre>
+<pre>"Ye killed a harmless toy box, and you think yer strong? Bah!"</pre>
+<pre>"Ye call us monsters, but then ye go and kill a BABY!? What a digusting creature you are."</pre>
+<pre>"Ye see a sick employee, and instead of trying to cure em, you kill em? You really ARE the worst!"</pre>
+<pre>"Oh, look at me! I'm an employee, I'm so strong that I kill toys! Hahahaha!"</pre>
+<pre>"Ye must be a special kind of wimp to feel threatened by jello!"</pre>
+<pre>"Yer so ugly, I think that spider died just from lookin at ya. Hahahaha!"</pre>
+<pre>"Cowardly of ye to kill something that can't even move if ye look at it."</pre>
+<pre>"That Thumper just wanted some cuddles, and you killed it! Yer even worse than I thought!"</pre>
+<pre>"Oi, put that back! My hotub can't run without power!"</pre>
+<pre>"Put that mask on yer face! Might make ye more attractive!"</pre>
+<pre>"Would be a tragedy if you didn't put that mask on and kill all yer friends. Hahahaha!"</pre>
+<pre>"You're such a bad parent, even that maneater baby wants to kill you." - Submitted by Sniker</pre>
+</details>
+
 ## To Do
-- Create system to track specific actions gargoyles can use to taunt players.
-	- Kill enemy.
-	- Pick up certain scrap items.
-	- Stay too long in the facility.
 - 1 more taunt for each employee class.
 - Add gargoyle scrap that taunts (probably lower volume than the monster).
 - **MAYBE** add Mirage integration. Gargoyle "Repeats" voice lines in a mocking manner. (Depends on difficulty and time to implement)

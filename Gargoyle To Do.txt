@@ -4,5 +4,8 @@ Gargoyle To Do:
 	- Pick up certain scrap items.
 	- Stay too long in the facility.
 - 1 more taunt for each employee class.
+- Add enemy taunt for other gargoyles.
+- Add mechanic for stealing items.
+	- Config option to enable/disable the mechanic.
 - Add gargoyle scrap that taunts (probably lower volume than the monster).
 - Mirage integration. Gargoyle "Repeats" voice lines in a mocking manner.

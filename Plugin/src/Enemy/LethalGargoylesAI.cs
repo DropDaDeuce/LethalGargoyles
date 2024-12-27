@@ -7,48 +7,112 @@ using LethalGargoyles.src.Utility;
 using Unity.Netcode;
 using UnityEngine;
 using LethalGargoyles.src.SoftDepends;
-using HarmonyLib;
-using System.Reflection;
 using UnityEngine.AI;
 using System.Collections.Concurrent;
 using System.Collections;
+using static LethalGargoyles.src.Enemy.LethalGargoylesAI.PlayerActivityTracker;
 
 namespace LethalGargoyles.src.Enemy
 {
-    [HarmonyPatch(typeof(DoorLock), "OnTriggerStay")]
-    public class HarmonyDoorPatch
+    public class LethalGargoylesAI : EnemyAI
     {
-        private static readonly FieldInfo enemyDoorMeterField = typeof(DoorLock).GetField("enemyDoorMeter", BindingFlags.NonPublic | BindingFlags.Instance);
+        public static readonly HashSet<string> trackedItems =
+        [
+            "Key",
+            "Apparatus",
+            "Comedy",
+            "Tragedy",
+            "Maneater",
+        ];
 
-        [HarmonyPostfix]
-        static void PostFixOnTriggerStay(DoorLock __instance, Collider other)
+        public static class PlayerActivityTracker
         {
-            if (other == null || other.GetComponent<EnemyAICollisionDetect>() == null || other.GetComponent<EnemyAICollisionDetect>().mainScript == null)
+            private static readonly Dictionary<PlayerControllerB, Dictionary<PlayerActivityType, ActivityData>> playerActivities = [];
+            private const float ActivityExpirationTime = 60f; // 1 minute in seconds
+
+            public enum PlayerActivityType
             {
-                return;
+                KilledEnemy,
+                PickedUpItem,
+                InFacility
             }
 
-            if (other.GetComponent<EnemyAICollisionDetect>().mainScript is LethalGargoylesAI gargoyles)
+            public class ActivityData
             {
-                if (enemyDoorMeterField != null)
+                public string? Data { get; set; }
+                public float TimeValue { get; set; }
+                public float LastActivityTime { get; set; }
+            }
+
+            public static void UpdatePlayerActivity(PlayerControllerB player, PlayerActivityType activityType, string? data = null, float timeValue = 0f)
+            {
+                if (!playerActivities.ContainsKey(player))
                 {
-                    float enemyDoorMeter = (float)enemyDoorMeterField.GetValue(__instance);
-                    if (enemyDoorMeter <= 0f && gargoyles.currentDoor == null) // Check if currentDoor is null
+                    playerActivities[player] = [];
+                }
+
+                playerActivities[player][activityType] = new ActivityData
+                {
+                    Data = data,
+                    TimeValue = timeValue, // Store the time value
+                    LastActivityTime = Time.time
+                };
+            }
+
+            public static ActivityData GetPlayerActivity(PlayerControllerB player, PlayerActivityType activityType)
+            {
+                if (playerActivities.TryGetValue(player, out var activities) &&
+                    activities.TryGetValue(activityType, out var activityData))
+                {
+                    if (Time.time - activityData.LastActivityTime <= ActivityExpirationTime)
                     {
-                        gargoyles.currentDoor = __instance;  // Assign the door
-                        gargoyles.lastDoorCloseTime = Time.time; // Reset the timer
+                        return activityData;
+                    }
+                    else
+                    {
+                        // Remove expired activity
+                        activities.Remove(activityType);
+                        return new ActivityData { Data = null, TimeValue = 0f, LastActivityTime = 0f }; // Return default/empty activity data 
                     }
                 }
-                else
+                return new ActivityData { Data = null, TimeValue = 0f, LastActivityTime = 0f }; // Return default/empty activity data
+            }
+
+            public static void RemoveActivity(PlayerControllerB player, PlayerActivityType activityType, string? dataValue = null)
+            {
+                if (playerActivities.TryGetValue(player, out var activities))
                 {
-                    Plugin.Logger.LogWarning("enemyDoorMeter field not found in DoorLock.");
+                    // Check if the activity exists before attempting to remove it
+                    if (activities.ContainsKey(activityType))
+                    {
+                        if (dataValue != null)
+                        {
+                            if (activities[activityType].Data == dataValue)
+                            {
+                                activities.Remove(activityType);
+                                Plugin.Instance.LogIfDebugBuild($"Removed {activityType} activity for {player.playerUsername} ({dataValue})");
+                            }
+                            else
+                            {
+                                Plugin.Instance.LogIfDebugBuild($"Item ({dataValue}) was not the stored value in {activityType} activity for {player.playerUsername}");
+                            }
+                        }
+                        else
+                        {
+                            activities.Remove(activityType);
+                            Plugin.Instance.LogIfDebugBuild($"Removed {activityType} activity for {player.playerUsername}");
+                        }
+
+                        if (activities.Count == 0)
+                        {
+                            playerActivities.Remove(player);
+                            Plugin.Instance.LogIfDebugBuild($"Removed player {player.playerUsername} from activity tracker (no remaining activities)");
+                        }
+                    }
                 }
             }
         }
-    }
 
-    public class LethalGargoylesAI : EnemyAI
-    {
 #pragma warning disable 0649
         public Transform turnCompass = null!;
         public Transform attackArea = null!;
@@ -138,7 +202,7 @@ namespace LethalGargoyles.src.Enemy
         private float awareDistSqr = 0f;
         private float idleDistanceSqr = 0f;
         private bool enablePush = false;
-  
+        
         enum State
         {
             SearchingForPlayer,
@@ -173,12 +237,6 @@ namespace LethalGargoyles.src.Enemy
             BackLeft,
             Left,
             FrontLeft
-        }
-
-        public struct RelativeZoneData
-        {
-            public Vector3 Position;
-            public float Distance;
         }
 
         [Conditional("DEBUG")]
@@ -1771,11 +1829,16 @@ namespace LethalGargoyles.src.Enemy
         {
             string? priorCauseOfDeath = null;
             string? playerClass = null;
+            ulong targetPlayerSteamID = 0;
+            string? targetPlayerUsername;
+
             int randSource = UnityEngine.Random.Range(1, 4);
+            List<PlayerActivityType> validActivities = [];
 
             if (targetPlayer != null)
             {
-                string targetPlayerUsername = targetPlayer.playerUsername;
+                targetPlayerUsername = targetPlayer.playerUsername;
+                targetPlayerSteamID = targetPlayer.playerSteamId;
 
                 foreach (var (playerName, causeOfDeath, source) in GetDeathCauses.previousRoundDeaths)
                 {
@@ -1800,6 +1863,16 @@ namespace LethalGargoyles.src.Enemy
                         playerClasses[targetPlayer] = playerClass;
                     }
                 }
+
+                // Get all non-null activities
+                foreach (PlayerActivityType activityType in PlayerActivityType.GetValues(typeof(PlayerActivityType)))
+                {
+                    ActivityData activityData = GetPlayerActivity(targetPlayer, activityType);
+                    if (activityData.Data != null || activityData.TimeValue > 0)
+                    {
+                        validActivities.Add(activityType);
+                    }
+                }
             }
 
             int randInt;
@@ -1815,29 +1888,53 @@ namespace LethalGargoyles.src.Enemy
             LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
 
             bool isTalking = GargoyleIsTalking();
-            if (randInt < 175)
+            if (randInt < 150)
             {
                 OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime, isTalking);
                 genTauntCount++;
             }
-            else if (randInt < 180)
+            else if (randInt < 155 && targetPlayerSteamID != 0 && ChooseRandomClip($"{targetPlayerSteamID}", "Player", out string? playerClip) && playerClip != null)
+            {
+                TauntClientRpc(playerClip, "player");
+            }
+            else if (randInt < 160)
             {
                 OtherTaunt("enemy", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime, isTalking);
                 genTauntCount = 0;
             }
-            else if (randInt < 190 && priorCauseOfDeath != null && !isTalking)
+            else if (randInt < 170 && priorCauseOfDeath != null && !isTalking)
             {
-                string? randClip = ChooseRandomClip("taunt_priordeath_" + priorCauseOfDeath, "PriorDeath");
+                ChooseRandomClip("taunt_priordeath_" + priorCauseOfDeath, "PriorDeath", out string? randClip);
                 if (randClip == null) { Plugin.Logger.LogError($"Clip missing for {priorCauseOfDeath} death."); return; }
                 TauntClientRpc(randClip, "priordeath");
                 genTauntCount = 0;
             }
-            else if (playerClass != null && !isTalking)
+            else if (randInt < 180 && playerClass != null && !isTalking)
             {
-                string? randClip = ChooseRandomClip("taunt_employeeclass_" + playerClass, "Class");
+                ChooseRandomClip("taunt_employeeclass_" + playerClass, "Class", out string? randClip);
                 if (randClip == null) { Plugin.Logger.LogError($"Clip missing for {playerClass} class."); return; }
                 TauntClientRpc(randClip, "class");
-                genTauntCount = 0;
+                genTauntCount = 0; 
+            }
+            else if (validActivities.Count > 0 && targetPlayer != null && !isTalking)
+            {
+                // Choose a random valid activity
+                PlayerActivityType randomActivity = validActivities[Random.Range(0, validActivities.Count)];
+
+                string? activityClip = null;
+
+                switch (randomActivity)
+                {
+                    case PlayerActivityType.KilledEnemy: ChooseRandomClip($"taunt_activity_killedenemy_{GetPlayerActivity(targetPlayer, randomActivity).Data}", "Activity", out activityClip); break;
+                    case PlayerActivityType.PickedUpItem: ChooseRandomClip($"taunt_activity_pickup_{GetPlayerActivity(targetPlayer, randomActivity).Data}", "Activity", out activityClip); break;
+                    case PlayerActivityType.InFacility: ChooseRandomClip("taunt_activity_facilitytime_", "Activity", out activityClip); break;
+                };
+
+                if (activityClip != null)
+                {
+                    TauntClientRpc(activityClip, "activity");
+                    RemoveActivity(targetPlayer, randomActivity);
+                }
             }
             else if (!isTalking)
             {
@@ -1924,7 +2021,7 @@ namespace LethalGargoyles.src.Enemy
                     {
                         LogIfDebugBuild(enemy.enemyType.enemyName);
                         lastEnemy = enemy.enemyType.enemyName;
-                        string? randomClip = ChooseRandomClip(clip, "Enemy");
+                        ChooseRandomClip(clip, "Enemy", out string? randomClip);
                         if (randomClip != null)
                         {
                             TauntClientRpc(randomClip, "enemy");
@@ -1948,7 +2045,7 @@ namespace LethalGargoyles.src.Enemy
             return null;
         }
 
-        private string? ChooseRandomClip(string clipName, string listName)
+        private bool ChooseRandomClip(string clipName, string listName, out string? audioClip)
         {
             List<AudioClip> clipList = AudioManager.GetClipListByCategory(listName);
             List<AudioClip> tempList = [];
@@ -1961,10 +2058,11 @@ namespace LethalGargoyles.src.Enemy
                 }
             }
 
-            if (tempList.Count == 0) { return null; }
+            if (tempList.Count == 0) { audioClip = null; return false; }
 
             int intRand = UnityEngine.Random.Range(0, tempList.Count);
-            return tempList[intRand].name;
+            audioClip = tempList[intRand].name;
+            return true;
         }
 
         public bool GargoyleIsTalking()
@@ -2016,6 +2114,10 @@ namespace LethalGargoyles.src.Enemy
                     clipList = Utility.AudioManager.playerDeathClips; break;
                 case "class":
                     clipList = Utility.AudioManager.classClips; break;
+                case "activity":
+                    clipList = Utility.AudioManager.activityClips; break;
+                case "player":
+                    clipList = Utility.AudioManager.playerClips; break;
             }
 
             AudioClip? clip = FindClip(clipName, clipList);
