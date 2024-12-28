@@ -5,7 +5,7 @@
         <AssemblyName>DropDaDeuce.LethalGargoyles</AssemblyName>
         <Product>LethalGargoyles</Product>
         <!-- Change to whatever version you're currently on. -->
-        <Version>0.4.2</Version>
+        <Version>0.5.0</Version>
     </PropertyGroup>
 
   <!-- Thunderstore CLI stuff -->

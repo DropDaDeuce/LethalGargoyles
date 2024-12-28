@@ -1,3 +1,25 @@
+## v0.5.0 - The Talkative Gargoyle
+
+**New Features:**
+
+- **Activity-Based Taunts:**
+    - The gargoyle now reacts to various player activities with unique taunts.
+    - Added 21 new voice lines for activity-based taunts.
+    - Added 1 new voice line for nearby gargoyle detection.
+    - Added 1 new voice line for SteamID taunts. (This is just to get the taunt type loaded. Additions will need to be added by the host in the Custom Voice Lines folder.)
+- **Custom Steam ID Taunts:**
+    - You can now add custom taunts for specific players by placing OGG files in the "Taunt - SteamIDs" folder, using the player's Steam ID as the file name prefix.
+
+**Changes:**
+
+- **Audio System:**
+    - Refactored taunt logic for better performance and maintainability.
+
+**Bug Fixes:**
+
+- Fixed minor bugs related to gargoyle behavior and AI.
+- Updated enemy names in taunt clips to align with internal names.
+
 ## v0.4.2
 
 **Changes:**

@@ -65,8 +65,8 @@ Voice lines are organized into the following categories:
 
 **5. Steam ID Taunts**
 
-- If you want to add a custom taunt for a specific Steam ID, you can do so by naming the OGG file "[SteamID]_[optional].ogg" (e.g., "76561198012345678_ConorTaunt.ogg"). The Gargoyle will play this custom taunt when the player with the specified Steam ID is the target.
-- There is a 5% chance that the Gargoyle will play a Steam ID taunt.
+- If you want to add a custom taunt for a specific Steam ID, you can do so by naming the OGG file "[SteamID][optional text].ogg" (e.g., "76561198012345678_ConorTaunt.ogg" or "76561198012345678.ogg"). The Gargoyle will play this custom taunt when the player with the specified Steam ID is the target.
+- There is a 2.5% chance that the Gargoyle will play a Steam ID taunt. This is to prevent these taunts from being overused.
     - If the player has multiple Steam ID taunts, the Gargoyle will randomly choose one to play.
 
 </details>

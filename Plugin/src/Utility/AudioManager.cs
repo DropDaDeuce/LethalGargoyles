@@ -162,12 +162,45 @@ public class AudioManager : NetworkBehaviour
             foreach (string fileName in fileNames)
             {
                 string clipName = Path.GetFileNameWithoutExtension(fileName);
-                if (PluginConfig.AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry) && configEntry.Value)
+
+                // Try to get the config entry
+                if (PluginConfig.AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry))
                 {
+                    // Check if the entry is enabled
+                    if (configEntry.Value)
+                    {
+                        byte[]? audioData = AudioFileToByteArray(fileName);
+                        if (audioData?.Length > 512000)
+                        {
+                            Plugin.Logger.LogError($"Sending Clip({clipName}) failed. Max clip size is 512000 bytes or 500KB");
+                            break;
+                        }
+                        else if (audioData != null)
+                        {
+                            await WaitForClientReady(clientId);
+                            if (!clientReady.ContainsKey(clientId)) break;
+                            await SendAudioClipToClient(clientId, audioData, clipName, category);
+                            clientReady[clientId] = false;
+                            SetClientReadyClientRpc(false, clientId);
+                            Plugin.Logger.LogInfo($"Sent Clip({clipName}) to ClientID({clientId})");
+                        }
+                    }
+                    else
+                    {
+                        // Log that the clip is disabled in the config
+                        Plugin.Instance.LogIfDebugBuild($"Clip '{clipName}' is disabled in the config.");
+                    }
+                }
+                else
+                {
+                    // Log that no config entry was found for the clip
+                    Plugin.Instance.LogIfDebugBuild($"No config entry found for clip '{clipName}'. Sending anyway.");
+
+                    // Send the audio clip even if no config entry was found
                     byte[]? audioData = AudioFileToByteArray(fileName);
                     if (audioData?.Length > 512000)
                     {
-                        Plugin.Logger.LogError("Sending Clip({clipName}) failed. Max clip size is 512000 bytes or 500KB");
+                        Plugin.Logger.LogError($"Sending Clip({clipName}) failed. Max clip size is 512000 bytes or 500KB");
                         break;
                     }
                     else if (audioData != null)
@@ -176,7 +209,7 @@ public class AudioManager : NetworkBehaviour
                         if (!clientReady.ContainsKey(clientId)) break;
                         await SendAudioClipToClient(clientId, audioData, clipName, category);
                         clientReady[clientId] = false;
-                        SetClientReadyClientRpc(false, clientId); // Still use ClientRpc to notify the client
+                        SetClientReadyClientRpc(false, clientId);
                         Plugin.Logger.LogInfo($"Sent Clip({clipName}) to ClientID({clientId})");
                     }
                 }

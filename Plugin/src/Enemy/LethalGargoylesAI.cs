@@ -157,6 +157,8 @@ namespace LethalGargoyles.src.Enemy
         private float lastAgrTauntTime = 0f;
         private float lastEnemyTauntTime = 0f;
 
+        private float lastSteamIDTauntTime = 0f;
+
         private static int lastGenTaunt = -1;
         private static int lastAgrTaunt = -1;
 
@@ -311,6 +313,8 @@ namespace LethalGargoyles.src.Enemy
             gargoyleTargets[myID] = targetPlayer;
             creatureVoice.maxDistance *= 3;
             pathDelayTimer = Time.time;
+
+            lastSteamIDTauntTime = Time.time - 91f;
 
             if (cachedOutsideAINodes.Count > 0)
             {
@@ -1889,7 +1893,7 @@ namespace LethalGargoyles.src.Enemy
       
         private bool TryPlayPlayerSpecificTaunt(int randInt, PlayerControllerB player)
         {
-            if (randInt >= 170 && randInt < 175 && player.playerSteamId != 0 &&
+            if (randInt >= 160 && randInt < 175 && player.playerSteamId != 0 && Time.time - lastSteamIDTauntTime > 90f &&
                 ChooseRandomClip($"{player.playerSteamId}", "SteamIDs", out string? playerClip) && playerClip != null)
             {
                 TauntClientRpc(playerClip, "steamids");
