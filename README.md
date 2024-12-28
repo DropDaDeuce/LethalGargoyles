@@ -84,6 +84,7 @@ The gargoyle's taunts are categorized as follows:
 * Prior Death Coroner
 * Employee Classes
 * Activity
+* SteamIDs
 
 <details>
 <summary>General (General taunts that play randomly during gameplay)</summary>
@@ -283,6 +284,11 @@ The gargoyle's taunts are categorized as follows:
 <pre>"Put that mask on yer face! Might make ye more attractive!"</pre>
 <pre>"Would be a tragedy if you didn't put that mask on and kill all yer friends. Hahahaha!"</pre>
 <pre>"You're such a bad parent, even that maneater baby wants to kill you." - Submitted by Sniker</pre>
+</details>
+
+<details>
+<summary>SteamIDs (I added one for my own Steam ID so that the mod would actually load the clip array)</summary>
+<pre>"If it isn't my creator! There's something I've always wanted to say to you, YOU SUCK! Hahahaha!"</pre>
 </details>
 
 ## To Do

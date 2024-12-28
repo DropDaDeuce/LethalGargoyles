@@ -151,7 +151,9 @@ namespace LethalGargoyles.src
                 { "GargoyleDeath", [] },
                 { "PriorDeath", [] },
                 { "Attack", [] },
-                { "Hit", [] }
+                { "Hit", [] },
+                { "Activity", [] },
+                { "SteamIDs", [] }
             };
 
             if (Plugin.Instance.IsEmployeeClassesLoaded)

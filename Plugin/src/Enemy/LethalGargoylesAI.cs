@@ -28,7 +28,7 @@ namespace LethalGargoyles.src.Enemy
         public static class PlayerActivityTracker
         {
             private static readonly Dictionary<PlayerControllerB, Dictionary<PlayerActivityType, ActivityData>> playerActivities = [];
-            private const float ActivityExpirationTime = 60f; // 1 minute in seconds
+            private static readonly Dictionary<PlayerControllerB, Dictionary<string, float>> playerTauntTimers = [];
 
             public enum PlayerActivityType
             {
@@ -51,6 +51,8 @@ namespace LethalGargoyles.src.Enemy
                     playerActivities[player] = [];
                 }
 
+                Plugin.Instance.LogIfDebugBuild($"Updating {activityType} activity for {player.playerUsername} ({data})");
+
                 playerActivities[player][activityType] = new ActivityData
                 {
                     Data = data,
@@ -64,16 +66,7 @@ namespace LethalGargoyles.src.Enemy
                 if (playerActivities.TryGetValue(player, out var activities) &&
                     activities.TryGetValue(activityType, out var activityData))
                 {
-                    if (Time.time - activityData.LastActivityTime <= ActivityExpirationTime)
-                    {
                         return activityData;
-                    }
-                    else
-                    {
-                        // Remove expired activity
-                        activities.Remove(activityType);
-                        return new ActivityData { Data = null, TimeValue = 0f, LastActivityTime = 0f }; // Return default/empty activity data 
-                    }
                 }
                 return new ActivityData { Data = null, TimeValue = 0f, LastActivityTime = 0f }; // Return default/empty activity data
             }
@@ -111,6 +104,37 @@ namespace LethalGargoyles.src.Enemy
                     }
                 }
             }
+
+            public static float GetPlayerTauntTimer(PlayerControllerB player, string timerName)
+            {
+                if (!playerTauntTimers.TryGetValue(player, out var timers))
+                {
+                    timers = new Dictionary<string, float>
+                    {
+                        { "lastLostTauntTime", Time.time - 61f },
+                        { "lastGrabTauntTime", Time.time - 61f },
+                        { "lastKillTauntTime", Time.time - 61f }
+                    };
+                    playerTauntTimers[player] = timers;
+                }
+
+                if (!timers.TryGetValue(timerName, out var timer))
+                {
+                    timer = Time.time - 61f;
+                    timers[timerName] = timer;
+                }
+
+                return timer;
+            }
+
+            public static void UpdatePlayerTauntTimer(PlayerControllerB player, string timerName)
+            {
+                if (playerTauntTimers.ContainsKey(player))
+                {
+                    playerTauntTimers[player][timerName] = Time.time;
+                }
+            }
+
         }
 
 #pragma warning disable 0649
@@ -133,8 +157,8 @@ namespace LethalGargoyles.src.Enemy
         private float lastAgrTauntTime = 0f;
         private float lastEnemyTauntTime = 0f;
 
-        private int lastGenTaunt = -1;
-        private int lastAgrTaunt = -1;
+        private static int lastGenTaunt = -1;
+        private static int lastAgrTaunt = -1;
 
         private int genTauntCount;
 
@@ -305,13 +329,12 @@ namespace LethalGargoyles.src.Enemy
                 cachedInsideAINodes.Clear();
             }
             foreach (var node in RoundManager.Instance.insideAINodes)
+            {
+                if (node != null)
                 {
-                    if (node != null)
-                    {
-                        cachedInsideAINodes.Add(node);
-                    }
+                    cachedInsideAINodes.Add(node);
                 }
-
+            }
 
             if (cachedAllAINodes.Count > 0)
             {
@@ -575,10 +598,11 @@ namespace LethalGargoyles.src.Enemy
             {
                 aggroPlayer = closestPlayer;
                 canSeePlayer = CanSeePlayer(aggroPlayer);
+                bool isTalking = GargoyleIsTalking();
 
-                if (Time.time - lastAgrTauntTime >= randAgrTauntTime)
+                if (Time.time - lastAgrTauntTime >= randAgrTauntTime && !isTalking)
                 {
-                    OtherTaunt("aggro", ref lastAgrTaunt, ref lastAgrTauntTime, ref randAgrTauntTime, GargoyleIsTalking());
+                    OtherTaunt("aggro", ref lastAgrTaunt, ref lastAgrTauntTime, ref randAgrTauntTime);
                 }
 
                 LookAtTarget(aggroPlayer.transform.position);
@@ -668,8 +692,8 @@ namespace LethalGargoyles.src.Enemy
                 killTrigger = FindNearestKillTrigger(targetPlayer.transform.position);
                 if (Time.time - playerCheckTimer > 3f)
                 {
-                    LogIfDebugBuild($"My Target is {targetPlayer.playerUsername}");
-                    LogIfDebugBuild($"Closest Kill Trigger Squared: {distToKillTriggerSqr}");
+                    //LogIfDebugBuild($"My Target is {targetPlayer.playerUsername}");
+                    //LogIfDebugBuild($"Closest Kill Trigger Squared: {distToKillTriggerSqr}");
                     //LogIfDebugBuild($"Player is on {GetPlayerSurfaceTag(targetPlayer)}");
                     ChangeTarget();
                     playerCheckTimer = Time.time;
@@ -1827,123 +1851,215 @@ namespace LethalGargoyles.src.Enemy
 
         public void Taunt()
         {
-            string? priorCauseOfDeath = null;
-            string? playerClass = null;
-            ulong targetPlayerSteamID = 0;
-            string? targetPlayerUsername;
+            if (targetPlayer == null) return;
 
-            int randSource = UnityEngine.Random.Range(1, 4);
-            List<PlayerActivityType> validActivities = [];
+            string? priorCauseOfDeath = GetPriorCauseOfDeath(targetPlayer);
+            string? playerClass = GetPlayerClass(targetPlayer);
+            List<PlayerActivityType> validActivities = GetValidActivities(targetPlayer);
 
-            if (targetPlayer != null)
+            int randInt = GetRandomTauntIndex(priorCauseOfDeath, playerClass);
+            bool isTalking = GargoyleIsTalking();
+
+            if (!isTalking)
             {
-                targetPlayerUsername = targetPlayer.playerUsername;
-                targetPlayerSteamID = targetPlayer.playerSteamId;
+                if (TryPlayPlayerSpecificTaunt(randInt, targetPlayer)) return;
+                if (TryPlayEnemyTaunt(randInt)) return;
+                if (TryPlayPriorDeathTaunt(randInt, priorCauseOfDeath)) return;
+                if (TryPlayClassTaunt(randInt, playerClass)) return;
+                if (TryPlayActivityTaunt(randInt, validActivities)) return;
 
-                foreach (var (playerName, causeOfDeath, source) in GetDeathCauses.previousRoundDeaths)
-                {
-                    
-                    if (playerName.Equals(targetPlayerUsername) &&
-                        (source == "Vanilla" || (randSource != 1 && source == "Coroner" && Plugin.Instance.IsCoronerLoaded)))
-                    {
-                        LogIfDebugBuild($"{playerName}'s cause of death last round was {causeOfDeath}");
-                        priorCauseOfDeath = causeOfDeath;
-                        break; // Exit the loop once a match is found
-                    }
-                }
-
-                if (Plugin.Instance.IsEmployeeClassesLoaded)
-                {
-                    // Retrieve the cached class
-                    if (!playerClasses.TryGetValue(targetPlayer, out playerClass))
-                    {
-                        // If not found, get the class and store it in the cache, 
-                        // or use "Employee" as a default if GetPlayerClass returns null
-                        playerClass = EmployeeClassesClass.GetPlayerClass(targetPlayer) ?? "Employee";
-                        playerClasses[targetPlayer] = playerClass;
-                    }
-                }
-
-                // Get all non-null activities
-                foreach (PlayerActivityType activityType in PlayerActivityType.GetValues(typeof(PlayerActivityType)))
-                {
-                    ActivityData activityData = GetPlayerActivity(targetPlayer, activityType);
-                    if (activityData.Data != null || activityData.TimeValue > 0)
-                    {
-                        validActivities.Add(activityType);
-                    }
-                }
-            }
-
-            int randInt;
-            if ((genTauntCount >= 10 && playerClass != null && priorCauseOfDeath != null) || (genTauntCount >= 15 && (playerClass != null || priorCauseOfDeath != null)))
-            {
-                randInt = UnityEngine.Random.Range(165, 200);
+                PlayGeneralTaunt(randInt);
             }
             else
             {
-                randInt = UnityEngine.Random.Range(1, 200);
+                lastGenTauntTime = Time.time;
+                randGenTauntTime = 2f;
             }
+        }
 
-            LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
-
-            bool isTalking = GargoyleIsTalking();
-            if (randInt < 150)
+        private int GetRandomTauntIndex(string? priorCauseOfDeath, string? playerClass)
+        {
+            if ((genTauntCount >= 10 && playerClass != null && priorCauseOfDeath != null) ||
+                (genTauntCount >= 15 && (playerClass != null || priorCauseOfDeath != null)))
             {
-                OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime, isTalking);
-                genTauntCount++;
+                return UnityEngine.Random.Range(170, 200);
             }
-            else if (randInt < 155 && targetPlayerSteamID != 0 && ChooseRandomClip($"{targetPlayerSteamID}", "Player", out string? playerClip) && playerClip != null)
+            return UnityEngine.Random.Range(1, 200);
+        }
+      
+        private bool TryPlayPlayerSpecificTaunt(int randInt, PlayerControllerB player)
+        {
+            if (randInt >= 170 && randInt < 175 && player.playerSteamId != 0 &&
+                ChooseRandomClip($"{player.playerSteamId}", "SteamIDs", out string? playerClip) && playerClip != null)
             {
-                TauntClientRpc(playerClip, "player");
-            }
-            else if (randInt < 160)
-            {
-                OtherTaunt("enemy", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime, isTalking);
+                TauntClientRpc(playerClip, "steamids");
+                LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
                 genTauntCount = 0;
+                return true;
             }
-            else if (randInt < 170 && priorCauseOfDeath != null && !isTalking)
+            return false;
+        }
+
+        private bool TryPlayEnemyTaunt(int randInt)
+        {
+            if (randInt >= 175 && randInt < 180)
             {
-                ChooseRandomClip("taunt_priordeath_" + priorCauseOfDeath, "PriorDeath", out string? randClip);
-                if (randClip == null) { Plugin.Logger.LogError($"Clip missing for {priorCauseOfDeath} death."); return; }
-                TauntClientRpc(randClip, "priordeath");
+                OtherTaunt("enemy", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
+                LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
                 genTauntCount = 0;
+                return true;
             }
-            else if (randInt < 180 && playerClass != null && !isTalking)
-            {
-                ChooseRandomClip("taunt_employeeclass_" + playerClass, "Class", out string? randClip);
-                if (randClip == null) { Plugin.Logger.LogError($"Clip missing for {playerClass} class."); return; }
-                TauntClientRpc(randClip, "class");
-                genTauntCount = 0; 
-            }
-            else if (validActivities.Count > 0 && targetPlayer != null && !isTalking)
-            {
-                // Choose a random valid activity
-                PlayerActivityType randomActivity = validActivities[Random.Range(0, validActivities.Count)];
+            return false;
+        }
 
-                string? activityClip = null;
-
-                switch (randomActivity)
+        private bool TryPlayPriorDeathTaunt(int randInt, string? priorCauseOfDeath)
+        {
+            if (randInt >= 180 && randInt < 190 && priorCauseOfDeath != null)
+            {
+                if (ChooseRandomClip("taunt_priordeath_" + priorCauseOfDeath, "PriorDeath", out string? randClip) && randClip != null)
                 {
-                    case PlayerActivityType.KilledEnemy: ChooseRandomClip($"taunt_activity_killedenemy_{GetPlayerActivity(targetPlayer, randomActivity).Data}", "Activity", out activityClip); break;
-                    case PlayerActivityType.PickedUpItem: ChooseRandomClip($"taunt_activity_pickup_{GetPlayerActivity(targetPlayer, randomActivity).Data}", "Activity", out activityClip); break;
-                    case PlayerActivityType.InFacility: ChooseRandomClip("taunt_activity_facilitytime_", "Activity", out activityClip); break;
-                };
+                    TauntClientRpc(randClip, "priordeath");
+                    LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
+                    genTauntCount = 0;
+                    return true;
+                }
+                Plugin.Logger.LogError($"Clip missing for {priorCauseOfDeath} death.");
+            }
+            return false;
+        }
+
+        private bool TryPlayClassTaunt(int randInt, string? playerClass)
+        {
+            if (randInt >= 190 && playerClass != null)
+            {
+                if (ChooseRandomClip("taunt_employeeclass_" + playerClass, "Class", out string? randClip) && randClip != null)
+                {
+                    TauntClientRpc(randClip, "class");
+                    LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
+                    genTauntCount = 0;
+                    return true;
+                }
+                Plugin.Logger.LogError($"Clip missing for {playerClass} class.");
+            }
+            return false;
+        }
+
+        private bool TryPlayActivityTaunt(int randInt, List<PlayerActivityType> validActivities)
+        {
+            if (targetPlayer != null && validActivities.Count > 0)
+            {
+                PlayerActivityType randomActivity = validActivities[UnityEngine.Random.Range(0, validActivities.Count)];
+                string? activityClip = GetActivityClip(randomActivity);
 
                 if (activityClip != null)
                 {
                     TauntClientRpc(activityClip, "activity");
                     RemoveActivity(targetPlayer, randomActivity);
+                    UpdateLastActivityTime(randomActivity);
+                    LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
+                    genTauntCount++;
+                    return true;
                 }
             }
-            else if (!isTalking)
+            return false;
+        }
+
+        private void PlayGeneralTaunt(int randInt)
+        {
+            OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime);
+            LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
+            genTauntCount++;
+        }
+
+        private string? GetPriorCauseOfDeath(PlayerControllerB player)
+        {
+            string? priorCauseOfDeath = null;
+            int randSource = UnityEngine.Random.Range(1, 4);
+
+            foreach (var (playerName, causeOfDeath, source) in GetDeathCauses.previousRoundDeaths)
             {
-                OtherTaunt("general", ref lastGenTaunt, ref lastGenTauntTime, ref randGenTauntTime, isTalking);
-                genTauntCount++;
+                if (playerName.Equals(player.playerUsername) &&
+                    (source == "Vanilla" || (randSource != 1 && source == "Coroner" && Plugin.Instance.IsCoronerLoaded)))
+                {
+                    LogIfDebugBuild($"{playerName}'s cause of death last round was {causeOfDeath}");
+                    priorCauseOfDeath = causeOfDeath;
+                    break;
+                }
+            }
+
+            return priorCauseOfDeath;
+        }
+
+        private string? GetPlayerClass(PlayerControllerB player)
+        {
+            if (Plugin.Instance.IsEmployeeClassesLoaded)
+            {
+                if (!playerClasses.TryGetValue(player, out var playerClass))
+                {
+                    playerClass = EmployeeClassesClass.GetPlayerClass(player) ?? "Employee";
+                    playerClasses[player] = playerClass;
+                }
+                return playerClass;
+            }
+            return null;
+        }
+
+        private List<PlayerActivityType> GetValidActivities(PlayerControllerB player)
+        {
+            List<PlayerActivityType> validActivities = [];
+            float activityTime;
+
+            foreach (PlayerActivityType activityType in PlayerActivityType.GetValues(typeof(PlayerActivityType)))
+            {
+                ActivityData activityData = GetPlayerActivity(player, activityType);
+                activityTime = activityType switch
+                {
+                    PlayerActivityType.InFacility => PlayerActivityTracker.GetPlayerTauntTimer(player, "lastLostTauntTime"),
+                    PlayerActivityType.PickedUpItem => PlayerActivityTracker.GetPlayerTauntTimer(player, "lastGrabTauntTime"),
+                    PlayerActivityType.KilledEnemy => PlayerActivityTracker.GetPlayerTauntTimer(player, "lastKillTauntTime"),
+                    _ => 0f,
+                };
+
+                LogIfDebugBuild($"Activity type {activityType} | Timer: {Time.time - activityTime} | Data: {activityData.Data} | TimeValue: {activityData.TimeValue}");
+
+                if ((activityData.Data != null || activityData.TimeValue > 0) && Time.time - activityTime > 60f)
+                {
+                    LogIfDebugBuild($"Adding activity type {activityType}");
+                    validActivities.Add(activityType);
+                }
+            }
+
+            return validActivities;
+        }
+
+        private string? GetActivityClip(PlayerActivityType activityType)
+        {
+            return activityType switch
+            {
+                PlayerActivityType.KilledEnemy => ChooseRandomClip($"taunt_activity_killedenemy_{GetPlayerActivity(targetPlayer, activityType).Data}", "Activity", out string? clip) ? clip : null,
+                PlayerActivityType.PickedUpItem => ChooseRandomClip($"taunt_activity_pickup_{GetPlayerActivity(targetPlayer, activityType).Data}", "Activity", out string? clip) ? clip : null,
+                PlayerActivityType.InFacility => ChooseRandomClip("taunt_activity_facilitytime_", "Activity", out string? clip) ? clip : null,
+                _ => null,
+            };
+        }
+
+        private void UpdateLastActivityTime(PlayerActivityType activityType)
+        {
+            switch (activityType)
+            {
+                case PlayerActivityType.InFacility:
+                    PlayerActivityTracker.UpdatePlayerTauntTimer(targetPlayer, "lastLostTauntTime");
+                    break;
+                case PlayerActivityType.PickedUpItem:
+                    PlayerActivityTracker.UpdatePlayerTauntTimer(targetPlayer, "lastGrabTauntTime");
+                    break;
+                case PlayerActivityType.KilledEnemy:
+                    PlayerActivityTracker.UpdatePlayerTauntTimer(targetPlayer, "lastKillTauntTime");
+                    break;
             }
         }
 
-        public void OtherTaunt(string clipType, ref int lastTaunt, ref float lastTauntTime, ref float randTime, bool isTalking)
+        public void OtherTaunt(string clipType, ref int lastTaunt, ref float lastTauntTime, ref float randTime)
         {
             List<AudioClip> clipList = [];
 
@@ -1965,24 +2081,16 @@ namespace LethalGargoyles.src.Enemy
 
             if (clipList.Count > 0)
             {
-                if (!isTalking)
+                // Play a random taunt clip
+                int randomIndex = UnityEngine.Random.Range(0, clipList.Count);
+                if (randomIndex == lastTaunt)
                 {
-                        // Play a random taunt clip
-                        int randomIndex = UnityEngine.Random.Range(0, clipList.Count);
-                        if (randomIndex == lastTaunt)
-                        {
-                            randomIndex++;
-                        }
-                        lastTaunt = randomIndex;
-                        TauntClientRpc(clipList[randomIndex].name, clipType);
-                    lastTauntTime = Time.time;
-                    randTime = UnityEngine.Random.Range(minTaunt, maxTaunt);
-                } 
-                else
-                {
-                    lastTauntTime = Time.time;
-                    randTime = UnityEngine.Random.Range((int)(minTaunt/2), (int)(maxTaunt/2));
+                    randomIndex++;
                 }
+                lastTaunt = randomIndex;
+                TauntClientRpc(clipList[randomIndex].name, clipType);
+                lastTauntTime = Time.time;
+                randTime = UnityEngine.Random.Range(minTaunt, maxTaunt);
             }
             else
             {
@@ -2001,19 +2109,19 @@ namespace LethalGargoyles.src.Enemy
                 {
                     string? clip = enemy.enemyType.enemyName.ToUpper() switch
                     {
-                        "BLOB" => "taunt_enemy_Slime",
+                        "BLOB" => "taunt_enemy_Blob",
                         "BUTLER" => "taunt_enemy_Butler",
                         "CENTIPEDE" => "taunt_enemy_Centipede",
-                        "GIRL" => "taunt_enemy_GhostGirl",
+                        "GIRL" => "taunt_enemy_Girl",
                         "HOARDINGBUG" => "taunt_enemy_HoardingBug",
                         "JESTER" => "taunt_enemy_Jester",
                         "MANEATER" => "taunt_enemy_Maneater",
                         "MASKED" => "taunt_enemy_Masked",
-                        "CRAWLER" => "taunt_enemy_Thumper",
+                        "CRAWLER" => "taunt_enemy_Crawler",
                         "BUNKERSPIDER" => "taunt_enemy_Spider",
-                        "SPRING" => "taunt_enemy_SpringHead",
+                        "SPRING" => "taunt_enemy_Spring",
                         "NUTCRACKER" => "taunt_enemy_Nutcracker",
-                        "FLOWERMAN" => "taunt_enemy_Bracken",
+                        "FLOWERMAN" => "taunt_enemy_Flowerman",
                         _ => null
                     };
 
@@ -2035,9 +2143,11 @@ namespace LethalGargoyles.src.Enemy
 
         AudioClip? FindClip(string clipName, List<AudioClip> clips)
         {
+            string lowerClipName = clipName.ToLowerInvariant();
+
             foreach (AudioClip clip in clips)
             {
-                if (clip.name.StartsWith(clipName))
+                if (clip.name.ToLowerInvariant().StartsWith(lowerClipName))
                 {
                     return clip;
                 }
@@ -2050,15 +2160,21 @@ namespace LethalGargoyles.src.Enemy
             List<AudioClip> clipList = AudioManager.GetClipListByCategory(listName);
             List<AudioClip> tempList = [];
 
+            string lowerClipName = clipName.ToLowerInvariant();
+
             foreach (AudioClip clip in clipList)
             {
-                if (clip.name.StartsWith(clipName))
+                if (clip.name.ToLowerInvariant().StartsWith(lowerClipName))
                 {
                     tempList.Add(clip);
                 }
             }
 
-            if (tempList.Count == 0) { audioClip = null; return false; }
+            if (tempList.Count == 0)
+            {
+                audioClip = null;
+                return false;
+            }
 
             int intRand = UnityEngine.Random.Range(0, tempList.Count);
             audioClip = tempList[intRand].name;
@@ -2116,7 +2232,7 @@ namespace LethalGargoyles.src.Enemy
                     clipList = Utility.AudioManager.classClips; break;
                 case "activity":
                     clipList = Utility.AudioManager.activityClips; break;
-                case "player":
+                case "steamids":
                     clipList = Utility.AudioManager.playerClips; break;
             }
 

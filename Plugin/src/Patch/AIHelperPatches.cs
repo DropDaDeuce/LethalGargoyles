@@ -7,6 +7,7 @@ using UnityEngine;
 using LethalGargoyles.src.Enemy;
 using System.Reflection;
 using System.Collections.Generic;
+using System.Collections;
 
 namespace LethalGargoyles.src.Patch
 {
@@ -48,11 +49,24 @@ namespace LethalGargoyles.src.Patch
         [HarmonyPostfix]
         static void Postfix(EnemyAI __instance, PlayerControllerB? playerWhoHit)
         {
-            if (playerWhoHit != null && __instance.isEnemyDead)
+            if (playerWhoHit != null)
             {
-                UpdatePlayerActivity(playerWhoHit, PlayerActivityType.KilledEnemy, __instance.enemyType.enemyName);
-                Plugin.Instance.LogIfDebugBuild("Player killed enemy: " + __instance.enemyType.enemyName);
+                __instance.StartCoroutine(KillEnemyHelper.KillEnemy(__instance, playerWhoHit));
             }
+        }
+    }
+
+    public class KillEnemyHelper
+    {
+        public static IEnumerator KillEnemy(EnemyAI enemyAI, PlayerControllerB playerWhoHit)
+        {
+            yield return new WaitForSeconds(1f); // Wait for the enemy to die
+            if (enemyAI.isEnemyDead)
+            {
+                UpdatePlayerActivity(playerWhoHit, PlayerActivityType.KilledEnemy, enemyAI.enemyType.enemyName);
+                Plugin.Instance.LogIfDebugBuild($"{playerWhoHit.playerUsername} killed enemy: {enemyAI.enemyType.enemyName}");
+            }
+            yield break; // Use yield break to return an empty IEnumerator
         }
     }
 
@@ -111,7 +125,7 @@ namespace LethalGargoyles.src.Patch
             {
                 if (__instance.isPlayerControlled && __instance.isInsideFactory && !__instance.isPlayerDead)
                 {
-                    Plugin.Instance.LogIfDebugBuild(__instance.playerUsername + " is inside the facility.");
+                    //Plugin.Instance.LogIfDebugBuild(__instance.playerUsername + " is inside the facility.");
                     // Record entry time if not already recorded
                     if (!playerEnterTimes.ContainsKey(__instance))
                     {
@@ -126,7 +140,7 @@ namespace LethalGargoyles.src.Patch
                         if (timeInFacility >= MinimumTimeInFacility * 60) // Convert minutes to seconds
                         {
                             UpdatePlayerActivity(__instance, PlayerActivityType.InFacility, "InFacilityTime", timeInFacility);
-                            Plugin.Instance.LogIfDebugBuild(__instance.playerUsername + " has been in the facility for " + timeInFacility + " seconds.");
+                            //Plugin.Instance.LogIfDebugBuild(__instance.playerUsername + " has been in the facility for " + timeInFacility + " seconds.");
                         }
                     }
                 }

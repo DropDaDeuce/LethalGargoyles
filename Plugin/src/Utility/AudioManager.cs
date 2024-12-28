@@ -105,7 +105,7 @@ public class AudioManager : NetworkBehaviour
         LogIfDebugBuild("Loaded gargoyle class taunt clips count: " + classClips.Count);
         LogIfDebugBuild("Loaded gargoyle voice attack clips count: " + attackClips.Count);
         LogIfDebugBuild("Loaded gargoyle voice hit clips count: " + hitClips.Count);
-        LogIfDebugBuild("Loaded gargoyle player clips count: " + hitClips.Count);
+        LogIfDebugBuild("Loaded gargoyle player clips count: " + playerClips.Count);
     }
 
     private void OnClientConnectedCallback(ulong clientId)
@@ -336,8 +336,28 @@ public class AudioManager : NetworkBehaviour
             {
                 string clipName = Path.GetFileNameWithoutExtension(fileName);
 
-                if (PluginConfig.AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry) && configEntry.Value)
+                Plugin.Instance.LogIfDebugBuild($"Trying to load clip: {clipName}");
+
+                // Try to get the config entry
+                if (PluginConfig.AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry))
                 {
+                    // Check if the entry is enabled
+                    if (configEntry.Value)
+                    {
+                        StartCoroutine(LoadAudioClip(fileName, category));
+                    }
+                    else
+                    {
+                        // Log that the clip is disabled in the config
+                        Plugin.Instance.LogIfDebugBuild($"Clip '{clipName}' is disabled in the config.");
+                    }
+                }
+                else
+                {
+                    // Log that no config entry was found for the clip
+                    Plugin.Instance.LogIfDebugBuild($"No config entry found for clip '{clipName}'. Loading anyway.");
+
+                    // Continue loading the clip even if no entry is found
                     StartCoroutine(LoadAudioClip(fileName, category));
                 }
             }
@@ -392,7 +412,7 @@ public class AudioManager : NetworkBehaviour
             "Class" => classClips,
             "Attack" => attackClips,
             "Hit" => hitClips,
-            "Player" => playerClips,
+            "SteamIDs" => playerClips,
             _ => throw new ArgumentException($"Invalid audio clip category: {category}"),// Or throw an exception
         };
     }
@@ -544,16 +564,16 @@ public class AudioManager : NetworkBehaviour
                 directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - EmployeeClass"));
                 return directoryInfo.GetFiles("*.*");
             case "Activity":
-                //directoryInfo = new DirectoryInfo(Path.Combine(Path.GetDirectoryName(folderLoc), folderName, "Taunt - Activity"));
-                //return directoryInfo.GetFiles("*.*");
+                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Activity"));
+                return directoryInfo.GetFiles("*.*");
             case "Attack":
                 directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Combat Dialog", "Attack"));
                 return directoryInfo.GetFiles("*.*");
             case "Hit":
                 directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Combat Dialog", "Hit"));
                 return directoryInfo.GetFiles("*.*");
-            case "Player":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Player"));
+            case "SteamIDs":
+                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - SteamIDs"));
                 return directoryInfo.GetFiles("*.*");
         }
         return [];
