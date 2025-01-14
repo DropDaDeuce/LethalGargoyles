@@ -105,6 +105,12 @@ namespace LethalGargoyles.src.Enemy
                 }
             }
 
+            public static void ClearAllPlayerData()
+            {
+                playerActivities.Clear();
+                playerTauntTimers.Clear();
+            }
+
             public static float GetPlayerTauntTimer(PlayerControllerB player, string timerName)
             {
                 if (!playerTauntTimers.TryGetValue(player, out var timers))
@@ -183,7 +189,7 @@ namespace LethalGargoyles.src.Enemy
             { RelativeZone.Left, 10f },
             { RelativeZone.FrontLeft, 12f },
         };
-        private static readonly Dictionary<RelativeZone, Vector3> RelativeZones = [];
+        private readonly Dictionary<RelativeZone, Vector3> RelativeZones = [];
 
         public AISearchRoutine? searchForPlayers;
         public int myID;
@@ -228,7 +234,7 @@ namespace LethalGargoyles.src.Enemy
         private float awareDistSqr = 0f;
         private float idleDistanceSqr = 0f;
         private bool enablePush = false;
-        
+
         enum State
         {
             SearchingForPlayer,
@@ -682,6 +688,10 @@ namespace LethalGargoyles.src.Enemy
 
             if (isEnemyDead || StartOfRound.Instance.allPlayersDead)
             {
+                if (StartOfRound.Instance.allPlayersDead)
+                {
+                    ClearAllVariables();
+                }
                 return;
             }
 
@@ -791,6 +801,19 @@ namespace LethalGargoyles.src.Enemy
                     LogIfDebugBuild("This Behavior State doesn't exist!");
                     break;
             }
+        }
+
+        private void ClearAllVariables()
+        {
+            activeGargoyles.Clear();
+            gargoyleTargets[myID] = null;
+            playerPushStates.Clear();
+            playerClasses.Clear();
+            cachedOutsideAINodes.Clear();
+            cachedInsideAINodes.Clear();
+            cachedAllAINodes.Clear();
+            cachedKillTriggers.Clear();
+            cachedRailings.Clear();
         }
 
         private void CacheKillTriggers()
@@ -2117,15 +2140,16 @@ namespace LethalGargoyles.src.Enemy
                         "BUTLER" => "taunt_enemy_Butler",
                         "CENTIPEDE" => "taunt_enemy_Centipede",
                         "GIRL" => "taunt_enemy_Girl",
-                        "HOARDINGBUG" => "taunt_enemy_HoardingBug",
+                        "HOARDINGBUG" => "taunt_enemy_Hoarding Bug",
                         "JESTER" => "taunt_enemy_Jester",
                         "MANEATER" => "taunt_enemy_Maneater",
                         "MASKED" => "taunt_enemy_Masked",
                         "CRAWLER" => "taunt_enemy_Crawler",
-                        "BUNKERSPIDER" => "taunt_enemy_Spider",
+                        "BUNKERSPIDER" => "taunt_enemy_Bunker Spider",
                         "SPRING" => "taunt_enemy_Spring",
                         "NUTCRACKER" => "taunt_enemy_Nutcracker",
                         "FLOWERMAN" => "taunt_enemy_Flowerman",
+                        "MOUTHDOG" => "taunt_enemy_Mouthdog",
                         _ => null
                     };
 
@@ -2145,7 +2169,7 @@ namespace LethalGargoyles.src.Enemy
             }
         }
 
-        AudioClip? FindClip(string clipName, List<AudioClip> clips)
+        public static AudioClip? FindClip(string clipName, List<AudioClip> clips)
         {
             string lowerClipName = clipName.ToLowerInvariant();
 
@@ -2159,7 +2183,7 @@ namespace LethalGargoyles.src.Enemy
             return null;
         }
 
-        private bool ChooseRandomClip(string clipName, string listName, out string? audioClip)
+        public static bool ChooseRandomClip(string clipName, string listName, out string? audioClip)
         {
             List<AudioClip> clipList = AudioManager.GetClipListByCategory(listName);
             List<AudioClip> tempList = [];
@@ -2245,7 +2269,19 @@ namespace LethalGargoyles.src.Enemy
             if (clipList.Count > 0 && clip != null)
             {
                 LogIfDebugBuild(clipType + " taunt: " + clip.name);
+                RoundManager.Instance.PlayAudibleNoise(base.transform.position, creatureVoice.maxDistance / 3f, creatureVoice.volume);
                 creatureVoice.PlayOneShot(clip);
+                StartCoroutine(PlayNoiseWhileTalking());
+            }
+        }
+
+        //This is so the MouthDog can "hear" the Gargoyle
+        IEnumerator PlayNoiseWhileTalking()
+        {
+            while (creatureVoice.isPlaying)
+            {
+                RoundManager.Instance.PlayAudibleNoise(transform.position, creatureVoice.maxDistance / 3f, creatureVoice.volume);
+                yield return new WaitForSeconds(3f); // Adjust the interval as needed
             }
         }
 

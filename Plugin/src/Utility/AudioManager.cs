@@ -11,8 +11,6 @@ using UnityEngine.Networking;
 using System.Threading.Tasks;
 using System.Threading;
 using LethalGargoyles.src.Config;
-using GameNetcodeStuff;
-using static LethalGargoyles.src.Enemy.LethalGargoylesAI.PlayerActivityTracker;
 
 namespace LethalGargoyles.src.Utility;
 public class AudioManager : NetworkBehaviour

@@ -291,7 +291,7 @@ Transform:
   m_Children:
   - {fileID: 2905947308530260503}
   m_Father: {fileID: 6906024198284413601}
-  m_LocalEulerAnglesHint: {x: 56.662903, y: 140.4166, z: 99.3137}
+  m_LocalEulerAnglesHint: {x: 40.491592, y: 138.10152, z: 90.424416}
 --- !u!1 &2524039676120208490
 GameObject:
   m_ObjectHideFlags: 0
@@ -302,6 +302,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2903942266258411216}
   - component: {fileID: 4294296572680252570}
+  - component: {fileID: 5390701889639575176}
   m_Layer: 19
   m_Name: LethalGargoyleModel
   m_TagString: Enemy
@@ -356,6 +357,20 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &5390701889639575176
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2524039676120208490}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -1767835748, guid: e0a89e6f23bd69e40ab1b6cd831745f1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  audioSource: {fileID: 4269935717684347862}
+  audioClip: {fileID: 8300000, guid: d8eede0f8e98eed45ad3304d9a72466b, type: 3}
 --- !u!1 &2600315705902069382
 GameObject:
   m_ObjectHideFlags: 0
@@ -387,7 +402,7 @@ Transform:
   m_Children:
   - {fileID: 1499910455220414900}
   m_Father: {fileID: 5927795824839115148}
-  m_LocalEulerAnglesHint: {x: 25.093786, y: -17.32308, z: 29.733229}
+  m_LocalEulerAnglesHint: {x: 36.774517, y: -20.259565, z: 25.847383}
 --- !u!1 &4151100004095168195
 GameObject:
   m_ObjectHideFlags: 0
@@ -419,7 +434,7 @@ Transform:
   m_Children:
   - {fileID: 1337677857223813244}
   m_Father: {fileID: 5927795824839115148}
-  m_LocalEulerAnglesHint: {x: -34.220528, y: 72.49687, z: -65.747116}
+  m_LocalEulerAnglesHint: {x: -37.67165, y: 86.4688, z: -89.464645}
 --- !u!1 &4464984341446799681
 GameObject:
   m_ObjectHideFlags: 0
@@ -691,7 +706,7 @@ Transform:
   m_Children:
   - {fileID: 1070062424112158752}
   m_Father: {fileID: 5927795824839115148}
-  m_LocalEulerAnglesHint: {x: 58.246017, y: 64.33186, z: -60.546474}
+  m_LocalEulerAnglesHint: {x: 58.342228, y: 75.96533, z: -58.71087}
 --- !u!1 &5336948093925145066
 GameObject:
   m_ObjectHideFlags: 0
@@ -754,7 +769,7 @@ Transform:
   m_Children:
   - {fileID: 4616571516191433928}
   m_Father: {fileID: 1499910455220414900}
-  m_LocalEulerAnglesHint: {x: 43.427597, y: 2.8685913, z: -92.33093}
+  m_LocalEulerAnglesHint: {x: 42.769394, y: 10.291086, z: -79.52248}
 --- !u!1 &5648638847795319812
 GameObject:
   m_ObjectHideFlags: 0
@@ -1049,7 +1064,7 @@ Transform:
   - {fileID: 6906024198284413601}
   - {fileID: 3562951296439634805}
   m_Father: {fileID: 6123828176842432078}
-  m_LocalEulerAnglesHint: {x: 85.75084, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 87.16502, y: 180, z: 180}
 --- !u!1 &7048882771995255040
 GameObject:
   m_ObjectHideFlags: 0
@@ -1081,7 +1096,7 @@ Transform:
   m_Children:
   - {fileID: 3461698502310525241}
   m_Father: {fileID: 1070062424112158752}
-  m_LocalEulerAnglesHint: {x: 11.064543, y: 13.635782, z: -74.36353}
+  m_LocalEulerAnglesHint: {x: 15.97524, y: 10.039248, z: -76.47646}
 --- !u!1 &7115615282760060981
 GameObject:
   m_ObjectHideFlags: 0
@@ -1259,6 +1274,8 @@ MonoBehaviour:
   gotFarthestNodeAsync: 0
   turnCompass: {fileID: 7383388482338324674}
   attackArea: {fileID: 0}
+  currentDoor: {fileID: 0}
+  lastDoorCloseTime: 0
   searchForPlayers:
     unsearchedNodes: []
     currentTargetNode: {fileID: 0}
@@ -1276,6 +1293,7 @@ MonoBehaviour:
     searchPrecision: 0
     randomized: 0
     onlySearchNodesInLOS: 0
+  myID: 0
 --- !u!195 &7242224457304669280
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -1401,7 +1419,7 @@ Transform:
   m_Children:
   - {fileID: 6030283305892687252}
   m_Father: {fileID: 3562951296439634805}
-  m_LocalEulerAnglesHint: {x: -29.16482, y: -63.113567, z: -148.82233}
+  m_LocalEulerAnglesHint: {x: -30.891653, y: -60.956818, z: -134.27892}
 --- !u!1 &8350596427895425529
 GameObject:
   m_ObjectHideFlags: 0

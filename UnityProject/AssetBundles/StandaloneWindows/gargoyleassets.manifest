@@ -1,15 +1,15 @@
 ManifestFileVersion: 0
-CRC: 2377244883
+CRC: 196066399
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: be1784ec6d55bb1d34b8c8e9c1a78ae7
+    Hash: 002a9bfb2163d1006404a9136da31fa3
   TypeTreeHash:
     serializedVersion: 2
-    Hash: 29a32690d0b6316e6dd4eefd6d8b803e
+    Hash: 77ddefbaa6c6d5429cc8b3f2b536c2fa
   IncrementalBuildHash:
     serializedVersion: 2
-    Hash: be1784ec6d55bb1d34b8c8e9c1a78ae7
+    Hash: 002a9bfb2163d1006404a9136da31fa3
 HashAppended: 0
 ClassTypes:
 - Class: 1
@@ -38,6 +38,8 @@ ClassTypes:
   Script: {instanceID: 0}
 - Class: 82
   Script: {instanceID: 0}
+- Class: 83
+  Script: {instanceID: 0}
 - Class: 91
   Script: {instanceID: 0}
 - Class: 95
@@ -49,6 +51,8 @@ ClassTypes:
 - Class: 114
   Script: {fileID: 11500000, guid: 04f75356a7e9c978bddc7d568e58a50b, type: 3}
 - Class: 114
+  Script: {fileID: 11500000, guid: c30496d6ae6d6f907456e10a94e01ec6, type: 3}
+- Class: 114
   Script: {fileID: 11500000, guid: 3c36d0a92cbb1f26a39169ef0eae393a, type: 3}
 - Class: 114
   Script: {fileID: 11500000, guid: 6d7127b8f98ca8ec9896b384a71d39a2, type: 3}
@@ -58,11 +62,15 @@ ClassTypes:
   Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
 - Class: 114
   Script: {fileID: 11500000, guid: d3cecf05b78b173605122a700874719c, type: 3}
+- Class: 114
+  Script: {fileID: -1767835748, guid: e0a89e6f23bd69e40ab1b6cd831745f1, type: 3}
 - Class: 115
   Script: {instanceID: 0}
 - Class: 137
   Script: {instanceID: 0}
 - Class: 195
+  Script: {instanceID: 0}
+- Class: 213
   Script: {instanceID: 0}
 - Class: 241
   Script: {instanceID: 0}
@@ -82,15 +90,22 @@ Assets:
 - Assets/ModAssets/LethalGargoyle/LethalGargoyle.asset
 - Assets/ModAssets/LethalGargoyle/Materials/MapDotRed.mat
 - Assets/ModAssets/LethalGargoyle/Materials/Body.mat
+- Assets/ModAssets/LethalGargoyle/Audio/sfx_PocketStatue.ogg
+- Assets/ModAssets/LethalGargoyle/Audio/sfx_Step.ogg
 - Assets/ModAssets/LethalGargoyle/Bestiary/LethalGargoyleTK.asset
+- Assets/ModAssets/LethalGargoyle/Scrap/GargoyleScrap.asset
 - Assets/ModAssets/LethalGargoyle/Materials/Eyes_Angry.mat
 - Assets/ModAssets/LethalGargoyle/Animations/attack.anim
 - Assets/ModAssets/LethalGargoyle/Animations/walk.001.anim
+- Assets/ModAssets/LethalGargoyle/Scrap/GargoyleIcon.png
 - Assets/ModAssets/LGNetworkHandler.prefab
 - Assets/ModAssets/LethalGargoyle/Materials/GargoyleSkinOld.png
 - Assets/ModAssets/LethalGargoyle/Materials/Material.mat
 - Assets/ModAssets/LethalGargoyle/LethalGargoyleObj.prefab
+- Assets/ModAssets/LethalGargoyle/Scrap/GargoyleStatue.prefab
+- Assets/ModAssets/LethalGargoyle/Audio/sfx_DropStatue.ogg
 - Assets/ModAssets/LethalGargoyle/Animations/idle.anim
+- Assets/ModAssets/LethalGargoyle/Audio/sfx_GrabStatue.ogg
 - Assets/ModAssets/LethalGargoyle/LethalGargoyleAnimator.controller
 - Assets/ModAssets/LethalGargoyle/Materials/GargoyleSkin.png
 - Assets/ModAssets/LethalGargoyle/Bestiary/LethalGargoyleTN.asset

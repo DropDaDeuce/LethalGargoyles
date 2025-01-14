@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System;
 using LethalGargoyles.src.Utility;
 using System.Collections.Generic;
+using LethalGargoyles.src.Scrap;
 
 namespace LethalGargoyles.src
 {
@@ -28,7 +29,7 @@ namespace LethalGargoyles.src
         public bool IsEmployeeClassesLoaded { get; private set; }
         public static AssetBundle? ModAssets;
         public static string? CustomAudioFolderPath { get; private set; }
-
+        public AudioClip? stepSound;
         public static Dictionary<string, List<string>> defaultAudioClipFilePaths = [];
 
         [Conditional("DEBUG")]
@@ -104,6 +105,22 @@ namespace LethalGargoyles.src
             defaultAudioClipFilePaths = GetDefaultAudioClipFilePaths();
             BoundConfig.InitializeAudioClipConfigs(defaultAudioClipFilePaths);
 
+            if (BoundConfig.enableScrap.Value)
+            {
+                int iRarity = BoundConfig.scrapWeight.Value;
+                Item gargoyleScrap = ModAssets.LoadAsset<Item>("Assets/ModAssets/LethalGargoyle/Scrap/GargoyleScrap.asset");
+                GargoyleStatue script = gargoyleScrap.spawnPrefab.AddComponent<GargoyleStatue>();
+                script.grabbable = true;
+                script.grabbableToEnemies = true;
+                script.itemProperties = gargoyleScrap;
+
+                LethalLib.Modules.Utilities.FixMixerGroups(gargoyleScrap.spawnPrefab);
+                LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(gargoyleScrap.spawnPrefab);
+                LethalLib.Modules.Items.RegisterScrap(gargoyleScrap, iRarity, LethalLib.Modules.Levels.LevelTypes.All);
+                Logger.LogInfo($"Gargoyle Statue scrap is registered.");
+            }
+
+            stepSound = ModAssets.LoadAsset<AudioClip>("Assets/ModAssets/LethalGargoyle/Audio/sfx_Step.ogg");
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
         }
 

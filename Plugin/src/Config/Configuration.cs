@@ -57,6 +57,14 @@ namespace LethalGargoyles.src.Config
                                  "Pushy Gargoyle",
                                  true,
                                  "Enable/Disable the push state for the gargoyle.");
+        public ConfigEntry<bool> enableScrap = cfg.Bind("Scrap",
+                                 "Gargoyle Statue Scrap Enabled",
+                                 true,
+                                 "Enable/Disable the Gargoyle Statue from spawning as scrap.");
+        public ConfigEntry<int> scrapWeight = cfg.Bind("Scrap",
+                                 "Gargoyle Statue Spawn Weight",
+                                 10,
+                                 "Sets the weight for the statue to spawn. 1 being very rare, and 100 being very common.");
         public static Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
         public void InitializeAudioClipConfigs(Dictionary<string, List<string>> audioClipFilePaths)
         {
