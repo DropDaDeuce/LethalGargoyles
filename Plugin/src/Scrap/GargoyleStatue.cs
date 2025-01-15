@@ -19,6 +19,8 @@ namespace LethalGargoyles.src.Scrap
 
         private static int lastTaunt = 0;
         private float distWarnSqr = 0f;
+        private float dogCooldown = 0f;
+        private bool dogHear = false;
         private float lastDogCheck = 0f;
         private static float lastDogTaunt = 0f;
 
@@ -27,8 +29,10 @@ namespace LethalGargoyles.src.Scrap
             base.Start();
             scrapAudio = base.GetComponentInParent<AudioSource>();
             distWarnSqr = Plugin.BoundConfig.distWarn.Value;
+            dogCooldown = Plugin.BoundConfig.dogCooldown.Value;
+            dogHear = Plugin.BoundConfig.dogHear.Value;
             distWarnSqr *= distWarnSqr;
-            lastDogTaunt =  Time.time - 300f;
+            lastDogTaunt =  Time.time - dogCooldown;
         }
 
         public override void Update()
@@ -36,7 +40,7 @@ namespace LethalGargoyles.src.Scrap
             base.Update();
             if (scrapAudio != null)
             {
-                if (Time.time - lastDogTaunt > 300f && Time.time - lastDogCheck > 1f && !scrapAudio.isPlaying)
+                if (dogHear && Time.time - lastDogTaunt > dogCooldown && Time.time - lastDogCheck > 1f && !scrapAudio.isPlaying)
                 {
                     lastDogCheck = Time.time;
                     if (DogNearStatue())
@@ -145,7 +149,7 @@ namespace LethalGargoyles.src.Scrap
             {
                 LogIfDebugBuild(clipType + " taunt: " + clip.name);
                 scrapAudio.PlayOneShot(clip);
-                StartCoroutine(PlayNoiseWhileTalking());
+                if (dogHear) StartCoroutine(PlayNoiseWhileTalking());
             }
         }
 

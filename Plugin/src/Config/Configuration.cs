@@ -65,7 +65,17 @@ namespace LethalGargoyles.src.Config
                                  "Gargoyle Statue Spawn Weight",
                                  10,
                                  "Sets the weight for the statue to spawn. 1 being very rare, and 100 being very common.");
+        public ConfigEntry<bool> dogHear = cfg.Bind("Scrap",
+                                 "Dog Can Hear Scrap/Dog Taunt",
+                                 true,
+                                 "Can the dog hear the scrap when it talks? This will also enable/disable the dog taunt.");
+        public ConfigEntry<float> dogCooldown = cfg.Bind("Scrap",
+                                 "Cooldown For Dog Taunt",
+                                 300f,
+                                 "Sets the cooldown between dog taunts in seconds. Default is 300(5 minutes).");
+
         public static Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
+
         public void InitializeAudioClipConfigs(Dictionary<string, List<string>> audioClipFilePaths)
         {
             foreach (var cat in audioClipFilePaths)
