@@ -2,12 +2,15 @@
 
 This mischievous gargoyle's goal is to follow you around and annoy you with his witty taunts. But be wary, he's not so passive if you don't respect his space!
 
+[![Lethal Gargoyles Mod Demo](YTPic/IntroVidThumbnail.jpg)](https://youtu.be/BGAoOVgEUk0)
+
 **Features:**
 
 * **Voiced Gargoyle:**  Features the voice of the modder, with 160+ unique voice lines (and more to come!).
 * **Dynamic Behavior:** The gargoyle tries to stay close while remaining hidden, but will become aggressive if you get too close.
 * **Varied Taunts:**  Includes a wide range of taunts for different situations, including general taunts, aggro responses, death reactions, and more.
 * **Customizable Voice Lines:**  Add or replace voice lines with your own custom OGG files. (Details on how are below)
+* **Scrap Item:**  Adds a Gargoyle Statue as scrap that can be interacted with to hear the Gargoyle's voice lines. Be careful, the Eyeless Dog can hear it too!
 * **Configuration Options:** Disable specific voice lines or adjust other settings through the mod's configuration file.
 
 <details>
@@ -163,6 +166,7 @@ The gargoyle's taunts are categorized as follows:
 <pre>"That's one scary butler! I'm glad I'm not you! Hahahaha!"</pre>
 <pre>"This one eats employees! I like it already!"</pre>
 <pre>"Another Gargoyle joins the employee hunt! Luckily this employee sucks, should be an easy kill!"</pre>
+<pre>"Aww, what a cute little doggy! Look at all those teeth, just waiting to rip you to shreds. Oh… Was I supposed to be quiet? Hahahaha"</pre>
 </details>
 
 <details>
@@ -293,7 +297,7 @@ The gargoyle's taunts are categorized as follows:
 
 ## To Do
 - 1 more taunt for each employee class.
-- Add gargoyle scrap that taunts (probably lower volume than the monster).
+- Add 
 - **MAYBE** add Mirage integration. Gargoyle "Repeats" voice lines in a mocking manner. (Depends on difficulty and time to implement)
 - Thinking of new ways to make the Gargoyle michievous without it being overbearing.
 

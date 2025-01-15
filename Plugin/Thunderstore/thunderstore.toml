@@ -31,6 +31,10 @@ source = "./Voice Lines"
 target = "plugins/LethalGargoyles/Voice Lines/"
 
 [[build.copy]]
+source = "../../IntroVidThumbnail.jpg"
+target = "/YTPic/"
+
+[[build.copy]]
 source = "../../CHANGELOG.md"
 target = "/"
 

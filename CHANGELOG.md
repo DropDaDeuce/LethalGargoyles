@@ -1,3 +1,18 @@
+## v0.6.0 - The Gargoyle's Treasure
+
+**New Features:**
+
+- **Gargoyle Statue Scrap:**
+    - Added a new gargoyle statue scrap item that can be found in the game.
+    - The Eyeless Dog can hear the gargoyle statue scrap.
+    - The gargoyle statue scrap has its own voice lines!
+- **Sound Effects:**
+    - The gargoyle now has footstep sound effects.
+
+**Changes:**
+
+- Updated various assets for improved visuals and sound effects.
+
 ## v0.5.0 - The Talkative Gargoyle
 
 **New Features:**
