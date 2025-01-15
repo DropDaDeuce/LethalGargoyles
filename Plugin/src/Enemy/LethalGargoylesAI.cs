@@ -1102,7 +1102,6 @@ namespace LethalGargoyles.src.Enemy
             return bestTarget;
         }
 
-
         // Helper method to update validPlayers and gargoyles lists
         // In UpdateValidPlayersAndGargoyles()
         private void UpdateValidPlayersAndGargoyles()

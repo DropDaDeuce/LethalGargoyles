@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace LethalGargoyles.src.Scrap
 {
-    internal class GargoyleStatue : PhysicsProp
+    internal class GargoyleStatue : GrabbableObject
     {
         [Conditional("DEBUG")]
         void LogIfDebugBuild(string text)
@@ -75,10 +75,7 @@ namespace LethalGargoyles.src.Scrap
         public override void ItemActivate(bool used, bool buttonDown = true)
         {
             base.ItemActivate(used, buttonDown);
-            if(buttonDown)
-            {
-                GeneralTaunt();
-            }
+            GeneralTaunt();
         }
 
         public void GeneralTaunt()

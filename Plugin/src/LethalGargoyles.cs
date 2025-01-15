@@ -54,7 +54,7 @@ namespace LethalGargoyles.src
                 Logger.LogError($"Failed to load custom assets.");
                 return;
             }
-           
+            
             CustomAudioFolderPath = Path.Combine(Path.GetDirectoryName(Paths.ExecutablePath),"Lethal Gargoyles","Custom Voice Lines");
             LogIfDebugBuild(CustomAudioFolderPath);
             // Create the folder if it doesn't exist
