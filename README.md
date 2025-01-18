@@ -2,9 +2,10 @@
 
 This mischievous gargoyle's goal is to follow you around and annoy you with his witty taunts. But be wary, he's not so passive if you don't respect his space!
 
+## Check Out The Mod Showcase Here:
 [![Lethal Gargoyles Mod Showcase](https://markdown-videos-api.jorgenkh.no/url?url=https%3A%2F%2Fyoutu.be%2FBGAoOVgEUk0)](https://youtu.be/BGAoOVgEUk0)
 
-**Features:**
+## Features:
 
 * **Voiced Gargoyle:**  Features the voice of the modder, with 160+ unique voice lines (and more to come!).
 * **Dynamic Behavior:** The gargoyle tries to stay close while remaining hidden, but will become aggressive if you get too close.
