@@ -5,7 +5,7 @@
         <AssemblyName>DropDaDeuce.LethalGargoyles</AssemblyName>
         <Product>LethalGargoyles</Product>
         <!-- Change to whatever version you're currently on. -->
-        <Version>0.6.0</Version>
+        <Version>0.6.1</Version>
     </PropertyGroup>
 
   <!-- Thunderstore CLI stuff -->
@@ -75,6 +75,7 @@
   <ItemGroup>
     <Reference Include="Coroner"><HintPath>../dlls/Coroner.dll</HintPath></Reference>
     <Reference Include="EmployeeClasses"><HintPath>../dlls/EmployeeClasses.dll</HintPath></Reference>
+    <Reference Include="EnhancedMonsters"><HintPath>../dlls/EmployeeClasses.dll</HintPath></Reference>
     <Reference Include="Unity.Collections">
       <HintPath>..\..\..\..\Program Files\Steam App\steamapps\common\Lethal Company\Lethal Company_Data\Managed\Unity.Collections.dll</HintPath>
     </Reference>

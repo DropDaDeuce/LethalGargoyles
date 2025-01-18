@@ -1860,7 +1860,10 @@ namespace LethalGargoyles.src.Enemy
             int randomIndex = UnityEngine.Random.Range(0, Utility.AudioManager.deathClips.Count());
             TauntClientRpc(Utility.AudioManager.deathClips[randomIndex].name, "death");
 
-            StopCoroutine(searchCoroutine);
+            if (searchCoroutine != null)
+            {
+                StopCoroutine(searchCoroutine);
+            }
 
             activeGargoyles.Remove(this); // Remove this gargoyle from the list when it dies
         }
@@ -2149,6 +2152,7 @@ namespace LethalGargoyles.src.Enemy
                         "NUTCRACKER" => "taunt_enemy_Nutcracker",
                         "FLOWERMAN" => "taunt_enemy_Flowerman",
                         "MOUTHDOG" => "taunt_enemy_Mouthdog",
+                        "LETHALGARGOYLE" => "taunt_enemy_LethalGargoyle",
                         _ => null
                     };
 

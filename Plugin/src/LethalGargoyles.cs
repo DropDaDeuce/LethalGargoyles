@@ -12,6 +12,7 @@ using System;
 using LethalGargoyles.src.Utility;
 using System.Collections.Generic;
 using LethalGargoyles.src.Scrap;
+using LethalGargoyles.src.SoftDepends;
 
 namespace LethalGargoyles.src
 {
@@ -19,6 +20,7 @@ namespace LethalGargoyles.src
     [BepInDependency(LethalLib.Plugin.ModGUID)]
     [BepInDependency("com.elitemastereric.coroner", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("Jade.EmployeeClasses", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("com.velddev.enhancedmonsters", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         internal static new ManualLogSource Logger = null!;
@@ -27,6 +29,7 @@ namespace LethalGargoyles.src
         internal static PluginConfig BoundConfig { get; private set; } = null!;
         public bool IsCoronerLoaded { get; private set; }
         public bool IsEmployeeClassesLoaded { get; private set; }
+        public bool IsEnhancedMonstersLoaded { get; private set; }
         public static AssetBundle? ModAssets;
         public static string? CustomAudioFolderPath { get; private set; }
         public AudioClip? stepSound;
@@ -94,8 +97,8 @@ namespace LethalGargoyles.src
             
             IsCoronerLoaded = DepIsLoaded("com.elitemastereric.coroner");
             IsEmployeeClassesLoaded = DepIsLoaded("Jade.EmployeeClasses");
-            Logger.LogInfo($"Coroner Is Loaded? " + IsCoronerLoaded);
-            Logger.LogInfo($"EmployeeClasses Is Loaded? " + IsEmployeeClassesLoaded);
+            IsEnhancedMonstersLoaded = DepIsLoaded("com.velddev.enhancedmonsters");
+            Logger.LogInfo($"Checking Soft Dependencies:\nCoroner Is Loaded? " + IsCoronerLoaded + "\nEmployeeClasses Is Loaded? " + IsEmployeeClassesLoaded + "\nEnhancedMonsters Is Loaded? " + IsEnhancedMonstersLoaded);
 
             if (IsCoronerLoaded)
             {
@@ -122,6 +125,17 @@ namespace LethalGargoyles.src
 
             stepSound = ModAssets.LoadAsset<AudioClip>("Assets/ModAssets/LethalGargoyle/Audio/sfx_Step.ogg");
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
+        }
+
+#pragma warning disable IDE0051 // Remove unused private members
+        private void OnEnable()
+#pragma warning restore IDE0051 // Remove unused private members
+        {
+            if (IsEnhancedMonstersLoaded)
+            {
+                EnhancedMonstersCompatibilityLayer.RegisterCustomMonsterEnemyData();
+                Logger.LogInfo($"Gargoyle has been registered with EnhancedMonsters.");
+            }
         }
 
         private static void InitializeNetworkBehaviours()
