@@ -1,3 +1,20 @@
+## v0.6.1 - Compatibility & Fixes
+
+**New Features:**
+
+- **Enhanced Monsters Compatibility:**
+    - Added compatibility with the Enhanced Monsters mod. WIP.
+
+**Changes:**
+
+**Bug Fixes:**
+- Modified the animator controller for the die animation of the gargoyle.
+- Fixed an issue with the gargoyle statue scrap not being activated properly on servers.
+
+**Notes:**
+
+- Enhanced Monsters compatibility is currently under development by the mod author.
+
 ## v0.6.0 - The Gargoyle's Treasure
 
 **New Features:**

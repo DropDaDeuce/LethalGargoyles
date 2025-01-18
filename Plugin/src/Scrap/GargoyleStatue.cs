@@ -79,6 +79,16 @@ namespace LethalGargoyles.src.Scrap
         public override void ItemActivate(bool used, bool buttonDown = true)
         {
             base.ItemActivate(used, buttonDown);
+            if (IsServer)
+            {
+                // Call the server RPC to handle the interaction
+                ItemActivateServerRpc(used, buttonDown);
+            }
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        private void ItemActivateServerRpc(bool used, bool buttonDown)
+        {
             GeneralTaunt();
         }
 
