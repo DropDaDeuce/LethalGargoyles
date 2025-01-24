@@ -18,9 +18,11 @@ namespace LethalGargoyles.src
 {
     [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
     [BepInDependency(LethalLib.Plugin.ModGUID)]
+    [BepInDependency(PathfindingLib.PathfindingLibPlugin.PluginGUID)]
     [BepInDependency("com.elitemastereric.coroner", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("Jade.EmployeeClasses", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("com.velddev.enhancedmonsters", BepInDependency.DependencyFlags.SoftDependency)]
+
     public class Plugin : BaseUnityPlugin
     {
         internal static new ManualLogSource Logger = null!;
@@ -47,9 +49,14 @@ namespace LethalGargoyles.src
         {
             Logger = base.Logger;
             BoundConfig = new PluginConfig(base.Config);
+
+            IsCoronerLoaded = DepIsLoaded("com.elitemastereric.coroner");
+            IsEmployeeClassesLoaded = DepIsLoaded("Jade.EmployeeClasses");
+            IsEnhancedMonstersLoaded = DepIsLoaded("com.velddev.enhancedmonsters");
+            Instance = this;
+
             InitializeNetworkBehaviours();
 
-            Instance = this;
             var bundleName = "gargoyleassets";
             ModAssets = AssetBundle.LoadFromFile(Path.Combine(Path.GetDirectoryName(Info.Location), bundleName));
             if (ModAssets == null)
@@ -95,9 +102,6 @@ namespace LethalGargoyles.src
             Enemies.RegisterEnemy(LethalGargoyle, BoundConfig.SpawnWeight.Value, Levels.LevelTypes.All, LethalGargoyleTN, LethalGargoyleTK);
             harmony.PatchAll();
             
-            IsCoronerLoaded = DepIsLoaded("com.elitemastereric.coroner");
-            IsEmployeeClassesLoaded = DepIsLoaded("Jade.EmployeeClasses");
-            IsEnhancedMonstersLoaded = DepIsLoaded("com.velddev.enhancedmonsters");
             Logger.LogInfo($"Checking Soft Dependencies:\nCoroner Is Loaded? " + IsCoronerLoaded + "\nEmployeeClasses Is Loaded? " + IsEmployeeClassesLoaded + "\nEnhancedMonsters Is Loaded? " + IsEnhancedMonstersLoaded);
 
             if (IsCoronerLoaded)
@@ -144,7 +148,7 @@ namespace LethalGargoyles.src
             var types = Assembly.GetExecutingAssembly().GetTypes();
             foreach (var type in types)
             {
-                if (type.FullName == "LethalGargoyles.src.SoftDepends.CoronerClass")
+                if (type.FullName == "LethalGargoyles.src.SoftDepends.CoronerClass" && !Plugin.Instance.IsCoronerLoaded)
                     continue;
                 var methods = type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
                 foreach (var method in methods)

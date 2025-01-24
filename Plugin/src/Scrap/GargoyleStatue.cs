@@ -79,7 +79,7 @@ namespace LethalGargoyles.src.Scrap
         public override void ItemActivate(bool used, bool buttonDown = true)
         {
             base.ItemActivate(used, buttonDown);
-            if (IsServer)
+            if (IsServer && scrapAudio != null && !scrapAudio.isPlaying)
             {
                 // Call the server RPC to handle the interaction
                 ItemActivateServerRpc(used, buttonDown);
