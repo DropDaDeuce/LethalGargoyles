@@ -10,6 +10,7 @@ using LethalGargoyles.src.SoftDepends;
 using UnityEngine.AI;
 using System.Collections.Concurrent;
 using System.Collections;
+using PathfindingLib.API.SmartPathfinding;
 using static LethalGargoyles.src.Enemy.LethalGargoylesAI.PlayerActivityTracker;
 
 namespace LethalGargoyles.src.Enemy
@@ -223,6 +224,10 @@ namespace LethalGargoyles.src.Enemy
         private readonly Dictionary<PlayerControllerB, string> playerClasses = [];
         private float lastSeenCheckTime = 0f;
 
+        private SmartPathTask? pathTask;
+        private float lastPathTaskTime = 0f;
+        private const float pathTaskCooldown = 0.5f;
+
         private float baseSpeed = 0f;
         private float attackRangeSqr = 0f;
         private int attackDamage = 0;
@@ -319,6 +324,8 @@ namespace LethalGargoyles.src.Enemy
             gargoyleTargets[myID] = targetPlayer;
             creatureVoice.maxDistance *= 3;
             pathDelayTimer = Time.time;
+            pathTask = new SmartPathTask();
+            lastPathTaskTime = Time.time;
 
             lastSteamIDTauntTime = Time.time - 91f;
 
@@ -377,6 +384,17 @@ namespace LethalGargoyles.src.Enemy
             base.Update();
 
             if (isEnemyDead || StartOfRound.Instance.allPlayersDead) return;
+
+            if (pathTask != null && pathTask.IsComplete)
+            {
+                if (pathTask.PathSucceeded(0))
+                {
+                    agent.SetPath(pathTask.Path);
+                }
+                pathTask.Dispose();
+                pathTask = new SmartPathTask();
+                lastPathTaskTime = Time.time;
+            }
 
             gargoyleTargets[myID] = targetPlayer;
 
@@ -1366,18 +1384,35 @@ namespace LethalGargoyles.src.Enemy
 
         public bool PathIsIntersectedByLOS(Vector3 targetPos, bool calculatePathDistance = false, bool avoidLineOfSight = true, bool checkLOSToTargetPlayer = false)
         {
+            NavMeshPath path1 = new();
             pathDistance = 0f;
-            if (agent.isOnNavMesh && !agent.CalculatePath(targetPos, path1))
+            if (pathTask != null && Time.time - lastPathTaskTime > pathTaskCooldown)
             {
-                return true; // Path could not be calculated
+                pathTask.StartPathTask(agent, transform.position, targetPos, SmartPathfindingLinkFlags.InternalTeleports | SmartPathfindingLinkFlags.Elevators | SmartPathfindingLinkFlags.MainEntrance | SmartPathfindingLinkFlags.FireExits);
+                lastPathTaskTime = Time.time;
             }
-            if (path1 == null || path1.corners.Length == 0)
+            if (pathTask != null && pathTask.IsComplete && pathTask.PathSucceeded(0))
             {
-                return true; // No path found
+                path1 = pathTask.Path;
+                agent.SetPath(path1);
+                pathTask.Dispose();
+                pathTask = new SmartPathTask();
             }
-            if ((path1.corners[^1] - RoundManager.Instance.GetNavMeshPosition(targetPos, RoundManager.Instance.navHit, 2.7f)).sqrMagnitude > 2.25f)
+            else
             {
-                return true; // Path is not complete
+                // Fallback to direct path calculation
+                if (agent.isOnNavMesh && !agent.CalculatePath(targetPos, path1))
+                {
+                    return true; // Path could not be calculated
+                }
+                if (path1 == null || path1.corners.Length == 0)
+                {
+                    return true; // No path found
+                }
+                if ((path1.corners[^1] - RoundManager.Instance.GetNavMeshPosition(targetPos, RoundManager.Instance.navHit, 2.7f)).sqrMagnitude > 2.25f)
+                {
+                    return true; // Path is not complete
+                }
             }
 
             bool flag = false;
@@ -1598,19 +1633,39 @@ namespace LethalGargoyles.src.Enemy
 
         private bool CheckForPath(Vector3 sourcePosition, Vector3 targetPosition)
         {
+            if (pathTask != null && Time.time - lastPathTaskTime > pathTaskCooldown)
+            {
+                pathTask.StartPathTask(agent, sourcePosition, targetPosition, SmartPathfindingLinkFlags.InternalTeleports | SmartPathfindingLinkFlags.Elevators | SmartPathfindingLinkFlags.MainEntrance | SmartPathfindingLinkFlags.FireExits);
+                lastPathTaskTime = Time.time;
+            }
+
+            if (pathTask != null && pathTask.IsComplete && pathTask.PathSucceeded(0))
+            {
+                NavMeshPath navPath = pathTask.Path;
+                agent.SetPath(navPath);
+                pathTask.Dispose();
+                pathTask = new SmartPathTask();
+
+                if ((navPath.corners[^1] - RoundManager.Instance.GetNavMeshPosition(targetPosition, RoundManager.Instance.navHit, 2.7f)).sqrMagnitude <= 2.4025f)
+                {
+                    return true;
+                }
+                return false;
+            }
+
+            // Fallback to synchronous calculation
             NavMeshPath path = new();
             if (!NavMesh.CalculatePath(sourcePosition, targetPosition, NavMesh.AllAreas, path))
             {
                 return false; // Path calculation failed
             }
 
-            // Additional checks from the base game's SetDestinationToPosition
             if ((path.corners[^1] - RoundManager.Instance.GetNavMeshPosition(targetPosition, RoundManager.Instance.navHit, 2.7f)).sqrMagnitude > 2.4025f)
             {
                 return false; // Path is not valid according to the base game's logic
             }
 
-            return true; // Path is valid
+            return true;
         }
 
         private Vector3 ValidateZonePosition(Vector3 position)
