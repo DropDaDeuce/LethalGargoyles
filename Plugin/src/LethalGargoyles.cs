@@ -140,6 +140,8 @@ namespace LethalGargoyles.src
                 EnhancedMonstersCompatibilityLayer.RegisterCustomMonsterEnemyData();
                 Logger.LogInfo($"Gargoyle has been registered with EnhancedMonsters.");
             }
+
+           // PlayerActivityTracker.shipInOrbit = true;
         }
 
         private static void InitializeNetworkBehaviours()

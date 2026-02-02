@@ -12,7 +12,6 @@ containsNsfwContent = false
 BepInEx-BepInExPack = "5.4.2100"
 Evaisa-LethalLib = "0.16.2"
 qwbarch-Concentus = "2.3.0"
-Zaggy1024-PathfindingLib = "0.0.6"
 
 [build]
 icon = "../../icon.png"
