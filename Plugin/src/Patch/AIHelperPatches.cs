@@ -121,7 +121,7 @@ namespace LethalGargoyles.src.Patch
         static void Postfix(PlayerControllerB __instance)
         {
             float lastRan = lastRanTimes.TryGetValue(__instance, out float lastRanTime) ? lastRanTime : 0f;
-            if (Time.time - lastRan > delay)
+            if (Time.time - lastRan > delay /*&& !shipInOrbit*/)
             {
                 if (__instance.isPlayerControlled && __instance.isInsideFactory && !__instance.isPlayerDead)
                 {
@@ -157,4 +157,44 @@ namespace LethalGargoyles.src.Patch
             }
         }
     }
+
+    /*
+    [HarmonyPatch(typeof(RoundManager))]
+    public static class RoundManagerPatch
+    {
+        [HarmonyPatch("DespawnPropsAtEndOfRound")]
+        [HarmonyPostfix]
+        public static void DespawnPropsAtEndOfRound_Postfix()
+        {
+            // Ensure LGInstance is not null before calling ClearAllVariables
+            if (LGInstance != null)
+            {
+                LGInstance.ClearAllVariables();
+                shipInOrbit = true;
+                Plugin.Instance.LogIfDebugBuild("LethalGargoylesAI variables cleared at the end of the round.");
+            }
+        }
+
+        [HarmonyPatch("UnloadSceneObjectsEarly")]
+        [HarmonyPostfix]
+        public static void UnloadSceneObjectsEarly_Postfix()
+        {
+            // Ensure LGInstance is not null before calling ClearAllVariables
+            if (LGInstance != null)
+            {
+                LGInstance.ClearAllVariables();
+                shipInOrbit = true;
+                Plugin.Instance.LogIfDebugBuild("LethalGargoylesAI variables cleared when unloading scene objects early.");
+            }
+        }
+
+        [HarmonyPatch("SetLevelObjectVariables")]
+        [HarmonyPostfix]
+        public static void SetLevelObjectVariables_Postfix()
+        {
+            shipInOrbit = false;
+            Plugin.Instance.LogIfDebugBuild("shipInOrbit set to false.");
+        }
+    } 
+    */
 }

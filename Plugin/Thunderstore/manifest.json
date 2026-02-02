@@ -2,7 +2,7 @@
   "namespace": "DropDaDeuce",
   "name": "LethalGargoyles",
   "description": "My first project and enemy for Lethal Company! This is an attempt to create an enemy that roams the map taunting you.",
-  "version_number": "0.0.1",
+  "version_number": "0.7.0",
   "dependencies": [
     "BepInEx-BepInExPack-5.4.2100",
     "Evaisa-LethalLib-0.16.1"

@@ -5,7 +5,7 @@
         <AssemblyName>DropDaDeuce.LethalGargoyles</AssemblyName>
         <Product>LethalGargoyles</Product>
         <!-- Change to whatever version you're currently on. -->
-        <Version>0.6.1</Version>
+        <Version>0.7.0</Version>
     </PropertyGroup>
 
   <!-- Thunderstore CLI stuff -->
@@ -65,7 +65,7 @@
     <!-- References - Game Assemblies -->
     <ItemGroup Condition="$(CI) != 'true'">
       <Reference Include="$(ManagedDirectory)Assembly-CSharp.dll" Publicize="true" Private="false" />
-      <Reference Include="$(ManagedDirectory)Unity.Netcode.Runtime.dll" />
+      <Reference Include="$(ManagedDirectory)Unity.Netcode.Runtime.dll" Private="false"/>
     </ItemGroup>
 
     <!-- Package References - Game Assemblies -->
@@ -76,20 +76,23 @@
   <ItemGroup>
     <Reference Include="Coroner"><HintPath>../dlls/Coroner.dll</HintPath></Reference>
     <Reference Include="EmployeeClasses"><HintPath>../dlls/EmployeeClasses.dll</HintPath></Reference>
-    <Reference Include="EnhancedMonsters"><HintPath>../dlls/EmployeeClasses.dll</HintPath></Reference>
     <Reference Include="PathfindingLib"><HintPath>../dlls/PathfindingLib.dll</HintPath></Reference>
+    <Reference Include="EnhancedMonsters"><HintPath>../dlls/EnhancedMonsters.dll</HintPath></Reference>
     <Reference Include="Unity.Collections">
       <HintPath>..\..\..\..\Program Files\Steam App\steamapps\common\Lethal Company\Lethal Company_Data\Managed\Unity.Collections.dll</HintPath>
     </Reference>
+    <Reference Include="Unity.Mathematics">
+      <HintPath>..\..\..\..\Program Files\Steam App\steamapps\common\Lethal Company\Lethal Company_Data\Managed\Unity.Mathematics.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
-    <Target Name="NetcodePatch" AfterTargets="PostBuildEvent">
-      <Exec Command="dotnet netcode-patch &quot;$(TargetPath)&quot; @(ReferencePathWithRefAssemblies->'&quot;%(Identity)&quot;', ' ')" />
-    </Target>
+  <Target Name="NetcodePatch" AfterTargets="PostBuildEvent">
+    <Exec Command="netcode-patch -uv 2022.3.62 -nv 1.12.0 -tv 1.0.0 &quot;$(TargetPath)&quot; @(ReferencePathWithRefAssemblies->'&quot;%(Identity)&quot;', ' ')" />
+  </Target>
 
-    <Target Name="PackThunderstore" DependsOnTargets="NetcodePatch" AfterTargets="PostBuildEvent" Condition="$(Configuration) == 'Release'">
-      <Exec Command="dotnet tcli build --config-path &quot;$(ProjectDir)Thunderstore/thunderstore.toml&quot; --package-version $(Version) --package-name $(Product) --package-namespace $(ThunderstoreTeam)" />
-    </Target>
+  <Target Name="PackThunderstore" DependsOnTargets="NetcodePatch" AfterTargets="PostBuildEvent" Condition="$(Configuration) == 'Release'">
+    <Exec Command="dotnet tcli build --config-path &quot;$(ProjectDir)Thunderstore\thunderstore.toml&quot; --package-version $(Version) --package-name $(Product) --package-namespace $(ThunderstoreTeam)" />
+  </Target>
 
   <Target Name="CopyNVorbis" AfterTargets="Build">
     <ItemGroup>

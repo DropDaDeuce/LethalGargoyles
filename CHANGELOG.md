@@ -1,3 +1,18 @@
+## v0.7.0 - The Gargoyle Is Back!
+
+**AI Improvements:**
+- Integrated PathfindingLib for improved pathfinding and navigation.
+- Improved the Gargoyle’s navigation so it can reach players more reliably and gets stuck less often.
+- Tweaked behavior logic (searching, sneaking, chasing, idling, and pushing) to make the AI feel more consistent and responsive.
+- General performance improvements when multiple Gargoyles are active (less repeated heavy logic per tick).
+
+**Game Parity:**
+- Updated the asset bundle to Unity 2022.3.62f3.
+- Updated netcode to be compatible with v73.
+
+### Documentation
+- Added/updated the changelog format and entries.
+
 ## v0.6.1 - Compatibility & Fixes
 
 **New Features:**

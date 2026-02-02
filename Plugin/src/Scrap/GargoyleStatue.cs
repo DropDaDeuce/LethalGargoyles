@@ -62,17 +62,18 @@ namespace LethalGargoyles.src.Scrap
         {
             foreach (EnemyAI enemy in RoundManager.Instance.SpawnedEnemies)
             {
-                
                 float distanceSqr = (enemy.transform.position - transform.position).sqrMagnitude;
-                if (distanceSqr <= distWarnSqr)
+                if (distanceSqr > distWarnSqr)
+                    continue;
+
+                // Only care about Eyeless Dog
+                if (string.Equals(enemy.enemyType.enemyName, "MouthDog", StringComparison.OrdinalIgnoreCase))
                 {
-                    LogIfDebugBuild(enemy.enemyType.enemyName.ToUpper());
-                    if (enemy.enemyType.enemyName.ToUpper() == "MOUTHDOG")
-                    {
-                        return true;
-                    }
+                    LogIfDebugBuild("MOUTHDOG near statue");
+                    return true;
                 }
             }
+
             return false;
         }
 

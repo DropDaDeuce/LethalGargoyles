@@ -1,5 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
-using System.Numerics;
+using UnityEngine; // <-- use UnityEngine.Vector3 (simpler)
 
 namespace LethalGargoyles.src.SoftDepends
 {
@@ -8,14 +8,26 @@ namespace LethalGargoyles.src.SoftDepends
         [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
         public static void RegisterCustomMonsterEnemyData()
         {
-            EnhancedMonsters.Utils.EnemyData.EnemyMetadata enemyMetadata = new()
+            var enemyMetadata = new EnhancedMonsters.Utils.EnemyData.EnemyMetadata
             {
-                MeshRotation = new Vector3(0, 90, 0),
+                MeshOffset = new Vector3(0f, 0f, 0f),
+
+                // Replaces old MeshRotation:
+                FloorRotation = new Vector3(0f, 90f, 0f),
+                HandRotation = new Vector3(0f, 90f, 0f),
+
                 AnimateOnDeath = false,
-                MeshOffset = new Vector3(0, 0, 0),
             };
 
-            EnhancedMonsters.Utils.EnemiesDataManager.RegisterEnemy("LethalGargoyle", /*is enemy sellable ?*/ true, /*min value:*/ 70, /*max value:*/ 90, /*mass:*/ 30, /*rank:*/ "B", enemyMetadata);
+            EnhancedMonsters.Utils.EnemiesDataManager.RegisterEnemy(
+                "LethalGargoyle",
+                true,   // pickupable / sellable
+                70,     // min value
+                90,     // max value
+                30f,    // mass
+                "B",
+                enemyMetadata
+            );
         }
     }
 }
