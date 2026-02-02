@@ -320,6 +320,7 @@ The gargoyle's taunts are categorized as follows:
  - **qwbarch** for uploading Concentus
  - **NVorbis:** This mod uses the NVorbis library for decoding OGG files. You can find the library and its source code here: [https://github.com/NVorbis/NVorbis](https://github.com/NVorbis/NVorbis)
  - **RichAudio**, **Syiacka**, and **Nightare** for testing with me.
+ - **Zagster** for creating PathfindingLib
 
 <details>
 <summary>Gargoyle Model Credit/Copyright - Original model by Lionhead Studios - Extracted by CharlieVet on cults3d.com - Modified by DropDaDeuce & Syiacka</summary>
