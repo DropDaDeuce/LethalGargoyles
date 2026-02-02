@@ -2,7 +2,7 @@
 
 **AI Improvements:**
 - Integrated PathfindingLib for improved pathfinding and navigation.
-- Improved the Gargoyle’s navigation so it can reach players more reliably and gets stuck less often.
+- Improved the Gargoyle's navigation so it can reach players more reliably and gets stuck less often.
 - Tweaked behavior logic (searching, sneaking, chasing, idling, and pushing) to make the AI feel more consistent and responsive.
 - General performance improvements when multiple Gargoyles are active (less repeated heavy logic per tick).
 
