@@ -90,9 +90,9 @@ namespace LethalGargoyles.src.Config
                                  "Enabled",
                                  true,
                                  "Master switch for diagnostic logging. When false, nothing below has any effect.");
-        public ConfigEntry<LogLevel> diagDefaultLevel = cfg.Bind("Diagnostics",
+        public ConfigEntry<LGLevel> diagDefaultLevel = cfg.Bind("Diagnostics",
                                  "Default Level",
-                                 LogLevel.Warn,
+                                 LGLevel.Warn,
                                  "Log level used for any category not overridden below.\nOff < Error < Warn < Info < Debug < Trace. Debug is the useful level when chasing a bug; Trace is a firehose.");
         public ConfigEntry<bool> diagIncludeContext = cfg.Bind("Diagnostics",
                                  "Include Context",
@@ -103,7 +103,7 @@ namespace LethalGargoyles.src.Config
                                  20,
                                  "Suppress an identical message after this many occurrences in a round, so a per-frame problem cannot bury the rest of the log. 0 disables suppression.");
 
-        public readonly Dictionary<LogCat, ConfigEntry<LogLevel>> diagCategoryLevels = [];
+        public readonly Dictionary<LogCat, ConfigEntry<LGLevel>> diagCategoryLevels = [];
 
         /// <summary>
         /// Binds one level entry per category and pushes the whole set into <see cref="LGLog"/>.
@@ -111,13 +111,13 @@ namespace LethalGargoyles.src.Config
         /// </summary>
         public void InitializeDiagnostics()
         {
-            var levels = new Dictionary<LogCat, LogLevel>();
+            var levels = new Dictionary<LogCat, LGLevel>();
             foreach (LogCat cat in Enum.GetValues(typeof(LogCat)))
             {
                 if (cat == LogCat.None) continue;
                 var entry = cfg.Bind("Diagnostics",
                                      cat.ToString(),
-                                     LogLevel.Warn,
+                                     LGLevel.Warn,
                                      $"Log level for the {cat} subsystem.");
                 diagCategoryLevels[cat] = entry;
                 levels[cat] = entry.Value;

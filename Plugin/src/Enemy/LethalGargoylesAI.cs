@@ -509,7 +509,16 @@ namespace LethalGargoyles.src.Enemy
                 float t0 = (float)sw.Elapsed.TotalMilliseconds;
 
                 closestPlayer = GetClosestPlayer();
-                distanceToClosestPlayerSqr = closestPlayer != null ? (transform.position - closestPlayer.transform.position).sqrMagnitude : 0f;
+                // MaxValue, not 0. A null closest player used to be recorded as distance zero -
+                // i.e. "a player is standing on top of me" - which stranded AggressivePursuit:
+                // HandleAggressivePursuitState is wrapped in `if (closestPlayer != null)` so it
+                // did nothing, and HandleAggroAndPush's `dist > aggroRangeSqr` arm could never
+                // fire, so HandleOutOfAggroRange was unreachable. The gargoyle stopped dead
+                // mid-chase with the chase animation still playing until its target died or
+                // walked out of the 60m aware radius.
+                distanceToClosestPlayerSqr = closestPlayer != null
+                    ? (transform.position - closestPlayer.transform.position).sqrMagnitude
+                    : float.MaxValue;
                 isSeen = GargoyleIsSeen(transform);
 
                 LogIfSlow("Seen/Closest", (float)sw.Elapsed.TotalMilliseconds - t0,
@@ -663,7 +672,8 @@ namespace LethalGargoyles.src.Enemy
                 }
             }
 
-            if (LGInstance != null)
+            // See DelayDoorClose: this was gated on the static LGInstance, which one gargoyle's
+            // death disabled for all the others.
             {
                 if (currentDoorTrigger == null && currentDoor != null)
                 {
@@ -991,6 +1001,14 @@ namespace LethalGargoyles.src.Enemy
                 {
                     AttackPlayer(aggroPlayer);
                 }
+            }
+            else
+            {
+                // Explicit exit. Without this the state had NO way out when GetClosestPlayer()
+                // returned null (vanilla rejects players in an enemy animation or sinking, which
+                // our own target-validity check does not), so the gargoyle just stood there.
+                LGLog.Debug(LogCat.StateMachine, $"{GargoyleTag} AggressivePursuit -> SearchingForPlayer (no closest player)");
+                SwitchState(State.SearchingForPlayer);
             }
         }
 
@@ -1650,11 +1668,32 @@ namespace LethalGargoyles.src.Enemy
             return targetCounts;
         }
 
+        /// <summary>
+        /// The ONLY sanctioned way to change this gargoyle's target.
+        ///
+        /// Multi-gargoyle target balancing was completely dead before this existed. The
+        /// acquisition path in <see cref="FoundClosestPlayerInRange"/> set targetPlayer and
+        /// _lastTarget but never gargoyleTargets[myID] - and because it DID set _lastTarget, the
+        /// reconciler in Update (`if (_lastTarget != targetPlayer)`) saw them equal and never
+        /// fixed it either. So the shared map stayed null for every gargoyle's entire life, every
+        /// count in GetGargoyleTargetCounts came back zero, ChangeTarget was unreachable dead
+        /// code, and FindBestTarget saw `0 &lt; fairShare` for everyone - so every gargoyle picked
+        /// the same nearest player and the rest of the crew was never stalked at all.
+        ///
+        /// Three values, one write. Do not set any of them directly.
+        /// </summary>
+        private void SetTarget(PlayerControllerB? newTarget)
+        {
+            targetPlayer = newTarget;
+            _lastTarget = newTarget;
+            gargoyleTargets[myID] = newTarget;
+        }
+
         bool FoundClosestPlayerInRange()
         {
             Dictionary<PlayerControllerB, int> targetCounts = GetGargoyleTargetCounts();
 
-            int fairShare = Mathf.CeilToInt((float)gargoyles.Count / validPlayers.Count);
+            int fairShare = CalculateFairShare();
 
             if (targetPlayer != null &&
                 targetCounts.ContainsKey(targetPlayer) &&
@@ -1665,25 +1704,23 @@ namespace LethalGargoyles.src.Enemy
 
                 if (newTarget != null && newTarget != targetPlayer)
                 {
-                    LogIfDebugBuild($"Changing {myID}'s target from {targetPlayer.playerClientId} to {newTarget.playerClientId}");
-                    gargoyleTargets[myID] = newTarget;
-                    targetPlayer = newTarget;
-                    _lastTarget = newTarget;
+                    LGLog.Debug(LogCat.Targeting, $"{GargoyleTag} retargeting from {targetPlayer.playerClientId} to {newTarget.playerClientId} (fairShare {fairShare})");
+                    SetTarget(newTarget);
                 }
             }
             else
             {
-                targetPlayer = null;
+                SetTarget(null);
             }
 
             if (targetPlayer == null)
             {
-                targetPlayer = FindBestTarget(targetCounts, fairShare);
+                var acquired = FindBestTarget(targetCounts, fairShare);
 
-                if (targetPlayer != null)
+                if (acquired != null)
                 {
-                    LogIfDebugBuild($"{myID} is targeting {targetPlayer.playerClientId}");
-                    _lastTarget = targetPlayer;
+                    LGLog.Debug(LogCat.Targeting, $"{GargoyleTag} acquired target {acquired.playerClientId} (fairShare {fairShare}, {gargoyles.Count} gargoyle(s), {validPlayers.Count} valid player(s))");
+                    SetTarget(acquired);
                     return true;
                 }
 
@@ -1693,11 +1730,23 @@ namespace LethalGargoyles.src.Enemy
             return true;
         }
 
+        /// <summary>
+        /// How many players each gargoyle may reasonably claim.
+        /// Guards the divide: with every player dead or across the entrance while a gargoyle is
+        /// still alive, validPlayers.Count is 0 and the old float divide produced
+        /// CeilToInt(Infinity), which is undefined.
+        /// </summary>
+        private int CalculateFairShare()
+        {
+            if (validPlayers.Count == 0) return int.MaxValue;
+            return Mathf.CeilToInt((float)gargoyles.Count / validPlayers.Count);
+        }
+
         private void ChangeTarget()
         {
             Dictionary<PlayerControllerB, int> targetCounts = GetGargoyleTargetCounts();
 
-            int fairShare = Mathf.CeilToInt((float)gargoyles.Count / validPlayers.Count);
+            int fairShare = CalculateFairShare();
             bool hasOverTargetedPlayer = false;
             foreach (var kvp in targetCounts)
             {
@@ -1730,10 +1779,8 @@ namespace LethalGargoyles.src.Enemy
 
                     if (newTarget != null && newTarget != targetPlayer)
                     {
-                        LogIfDebugBuild($"Changing {myID}'s target from {targetPlayer.playerClientId} to {newTarget.playerClientId}");
-                        gargoyleTargets[myID] = newTarget;
-                        targetPlayer = newTarget;
-                        _lastTarget = newTarget;
+                        LGLog.Debug(LogCat.Targeting, $"{GargoyleTag} rebalancing target from {targetPlayer.playerClientId} to {newTarget.playerClientId} (count {targetCounts[targetPlayer]} > fairShare {fairShare})");
+                        SetTarget(newTarget);
                     }
                 }
             }
@@ -1835,17 +1882,37 @@ namespace LethalGargoyles.src.Enemy
             nextZoneRight = GetNextZone(currentZone, 1);
             nextZoneLeft = GetNextZone(currentZone, -1);
 
-            bool leftPath = CheckZonePath("Left");
-            bool rightPath = CheckZonePath("Right");
+            // The two distances are reset HERE, once, before both probes. They used to be reset
+            // at the top of CheckZonePath itself, so the "Right" call wiped whatever the "Left"
+            // call had just measured and every comparison below was decided against a constant
+            // 1000f - the left/right preference has never actually worked.
+            leftPathDist = 1000f;
+            rightPathDist = 1000f;
 
-            RelativeZone targetZone = rightPath ? nextZoneRight : nextZoneLeft;
+            bool leftPath = CheckZonePath(goRight: false);
+            bool rightPath = CheckZonePath(goRight: true);
 
-            if ((rightPath && RelativeZoneToString(currentZone).Contains("Right")) || (rightPath && !leftPath) || (rightPath && leftPath && rightPathDist <= leftPathDist))
+            bool goRight;
+            if (rightPath && !leftPath) goRight = true;
+            else if (leftPath && !rightPath) goRight = false;
+            else if (rightPath && leftPath)
             {
-                return RelativeZones[targetZone];
+                // Keep circling the way we are already going when the current zone commits to a
+                // side, otherwise take the shorter path.
+                if (IsRightZone(currentZone)) goRight = true;
+                else if (IsLeftZone(currentZone)) goRight = false;
+                else goRight = rightPathDist <= leftPathDist;
             }
-            else if ((leftPath && RelativeZoneToString(currentZone).Contains("Left")) || (leftPath && !rightPath) || (leftPathDist < rightPathDist && leftPath && rightPath))
+            else goRight = false; // neither path is viable; fall through to the node fallback
+
+            if (leftPath || rightPath)
             {
+                // Pick the zone matching the direction actually chosen. This was computed before
+                // the decision, so once the distances above started differing it would have
+                // returned the RIGHT zone while claiming to have chosen left.
+                RelativeZone targetZone = goRight ? nextZoneRight : nextZoneLeft;
+                if (LGLog.On(LogCat.Movement, LGLevel.Trace))
+                    LGLog.Trace(LogCat.Movement, $"{GargoyleTag} circling {(goRight ? "right" : "left")} from {currentZone} -> {targetZone} (L {leftPathDist:0.0} / R {rightPathDist:0.0})");
                 return RelativeZones[targetZone];
             }
 
@@ -1897,21 +1964,30 @@ namespace LethalGargoyles.src.Enemy
             };
         }
 
-        private bool CheckZonePath(string side)
+        private static bool IsRightZone(RelativeZone z) =>
+            z is RelativeZone.FrontRight or RelativeZone.Right or RelativeZone.BackRight;
+
+        private static bool IsLeftZone(RelativeZone z) =>
+            z is RelativeZone.FrontLeft or RelativeZone.Left or RelativeZone.BackLeft;
+
+        /// <summary>
+        /// Probes whether the gargoyle can walk around the target in one direction, recording the
+        /// path length into <see cref="leftPathDist"/> or <see cref="rightPathDist"/>.
+        /// The caller resets both BEFORE calling this for each side - resetting them here made the
+        /// second call destroy the first call's measurement.
+        /// </summary>
+        private bool CheckZonePath(bool goRight)
         {
             RelativeZone testZone = currentZone;
             RelativeZone nextZone;
             float pathDist = 0f;
-
-            leftPathDist = 1000f;
-            rightPathDist = 1000f;
 
             const int MAX_STEPS = 8;
             int steps = 0;
 
             while (steps++ < MAX_STEPS)
             {
-                nextZone = side == "Right" ? GetNextZone(testZone, 1) : GetNextZone(testZone, -1);
+                nextZone = goRight ? GetNextZone(testZone, 1) : GetNextZone(testZone, -1);
 
                 if (nextZone == RelativeZone.Front)
                 {
@@ -1961,12 +2037,12 @@ namespace LethalGargoyles.src.Enemy
                 if (Time.time >= _nextZoneFailLogTime)
                 {
                     _nextZoneFailLogTime = Time.time + 1.0f;
-                    LogIfDebugBuild($"Path calculation failed. Exceeded max steps while checking {side} side.");
+                    LogIfDebugBuild($"Path calculation failed. Exceeded max steps while checking {(goRight ? "Right" : "Left")} side.");
                 }
                 return false;
             }
 
-            if (side == "Right")
+            if (goRight)
                 rightPathDist = pathDist;
             else
                 leftPathDist = pathDist;
@@ -2316,7 +2392,11 @@ namespace LethalGargoyles.src.Enemy
         private IEnumerator DelayDoorClose(DoorLock door)
         {
             yield return new WaitForSeconds(0.1f);
-            if (LGInstance != null)
+            // Tests `this`, not the static LGInstance. Every gargoyle overwrites LGInstance with
+            // itself on spawn and nobody nulls it on death, so once the LAST-SPAWNED one died the
+            // static went fake-null and every survivor silently stopped animating doors shut -
+            // while still firing the RPC, so door state and visual disagreed.
+            if (this != null)
             {
                 if (door != null && door.gameObject.TryGetComponent<AnimatedObjectTrigger>(out var component))
                 {
@@ -2332,6 +2412,11 @@ namespace LethalGargoyles.src.Enemy
             {
                 foreach (EnemyAI enemy in RoundManager.Instance.SpawnedEnemies)
                 {
+                    // Skip ourselves. Without this the first candidate is always `this` at
+                    // distance 0, so the method returned immediately every time and the
+                    // "there's an enemy near me" warning was really just finding itself.
+                    if (enemy == null || ReferenceEquals(enemy, this) || enemy.isEnemyDead) continue;
+
                     float distanceSqr = (enemy.transform.position - transform.position).sqrMagnitude;
                     if (distanceSqr <= distWarnSqr)
                     {
@@ -2545,14 +2630,32 @@ namespace LethalGargoyles.src.Enemy
             return UnityEngine.Random.Range(1, 200);
         }
 
+        /// <summary>
+        /// Advances the general taunt gate. Any taunt path that does NOT route through
+        /// <see cref="OtherTaunt"/> must call this, or the gate its callers read stays satisfied
+        /// and Taunt() re-enters every frame.
+        /// </summary>
+        private void MarkTaunted()
+        {
+            lastGenTauntTime = Time.time;
+            randGenTauntTime = UnityEngine.Random.Range(minTaunt, maxTaunt);
+        }
+
         private bool TryPlayPlayerSpecificTaunt(int randInt, PlayerControllerB player)
         {
             if (randInt >= 160 && randInt < 175 && player.playerSteamId != 0 && Time.time - lastSteamIDTauntTime > 90f &&
                 ChooseRandomClip($"{player.playerSteamId}", "SteamIDs", out string? playerClip) && playerClip != null)
             {
                 TauntClientRpc(playerClip, "steamids");
-                LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
+                LGLog.Debug(LogCat.Taunt, $"{GargoyleTag} SteamID taunt for {player.playerUsername} (roll {randInt}, {genTauntCount} general taunts since last special)");
                 genTauntCount = 0;
+                // Both timers, on success. lastSteamIDTauntTime was assigned exactly once - in
+                // Start, as Time.time - 91f - and never again, so the 90s cooldown above was
+                // permanently satisfied and personal lines could fire back to back. And without
+                // the general timer, Taunt() re-ran every frame because its caller gates on
+                // lastGenTauntTime, which only OtherTaunt was updating.
+                lastSteamIDTauntTime = Time.time;
+                MarkTaunted();
                 return true;
             }
             return false;
@@ -2614,8 +2717,13 @@ namespace LethalGargoyles.src.Enemy
                     TauntClientRpc(activityClip, "activity");
                     RemoveActivity(targetPlayer, randomActivity);
                     UpdateLastActivityTime(randomActivity);
-                    LogIfDebugBuild($"Random Taunt Number: {randInt} | # of general taunts: {genTauntCount}");
+                    LGLog.Debug(LogCat.Taunt, $"{GargoyleTag} activity taunt ({randomActivity}) for {targetPlayer.playerUsername} (roll {randInt})");
                     genTauntCount++;
+                    // Same omission as the SteamID path: every other success route goes through
+                    // OtherTaunt, which advances these. This one did not, so the gate stayed open
+                    // and Taunt() re-entered on the very next frame - which is not cheap, and
+                    // produced bunched, back-to-back voice lines.
+                    MarkTaunted();
                     return true;
                 }
             }
@@ -2768,6 +2876,13 @@ namespace LethalGargoyles.src.Enemy
 
         public void EnemyTaunt()
         {
+            // Advance the timer on EVERY exit, not just on the 3% success. It was only written
+            // inside the success branch, so once the window opened it stayed open and this method
+            // - which walks all of RoundManager.SpawnedEnemies and calls GargoyleIsTalking() -
+            // ran at FRAME RATE, per gargoyle, until a taunt finally fired.
+            lastEnemyTauntTime = Time.time;
+            randEnemyTauntTime = 1.5f;
+
             if (!GargoyleIsTalking())
             {
                 EnemyAI? enemy = EnemyNearGargoyle();
@@ -2809,6 +2924,9 @@ namespace LethalGargoyles.src.Enemy
                         if (randomClip != null)
                         {
                             TauntClientRpc(randomClip, "enemy");
+                            LGLog.Debug(LogCat.Taunt, $"{GargoyleTag} enemy-warning taunt for {enemy.enemyType.enemyName}");
+                            // Success gets the full cooldown; the early exit above only holds off
+                            // the scan for a moment.
                             lastEnemyTauntTime = Time.time;
                             randEnemyTauntTime = UnityEngine.Random.Range(minTaunt, maxTaunt);
                         }

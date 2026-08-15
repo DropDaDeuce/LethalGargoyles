@@ -8,7 +8,7 @@ namespace LethalGargoyles.src.Utility
     /// Severity levels, ordered. A message is emitted when its level is at or below
     /// the level configured for its category.
     /// </summary>
-    public enum LogLevel
+    public enum LGLevel
     {
         Off = 0,
         Error = 1,
@@ -52,7 +52,7 @@ namespace LethalGargoyles.src.Utility
     /// told to set one category to Debug and send the log.
     ///
     /// HOT PATHS MUST GUARD THE CALL:
-    ///     if (LGLog.On(LogCat.Movement, LogLevel.Trace))
+    ///     if (LGLog.On(LogCat.Movement, LGLevel.Trace))
     ///         LGLog.Trace(LogCat.Movement, $"...");
     /// The guard is what keeps the interpolated string from being built when the category is
     /// off. C# 10 interpolated string handlers would make this automatic, but they need a
@@ -61,8 +61,8 @@ namespace LethalGargoyles.src.Utility
     /// </summary>
     internal static class LGLog
     {
-        private static readonly Dictionary<LogCat, LogLevel> Levels = [];
-        private static LogLevel _defaultLevel = LogLevel.Warn;
+        private static readonly Dictionary<LogCat, LGLevel> Levels = [];
+        private static LGLevel _defaultLevel = LGLevel.Warn;
         private static bool _enabled = true;
         private static bool _includeContext = true;
         private static int _repeatLimit = 20;
@@ -74,8 +74,8 @@ namespace LethalGargoyles.src.Utility
 
         internal static void Configure(
             bool enabled,
-            LogLevel defaultLevel,
-            Dictionary<LogCat, LogLevel> perCategory,
+            LGLevel defaultLevel,
+            Dictionary<LogCat, LGLevel> perCategory,
             bool includeContext,
             int repeatLimit)
         {
@@ -91,21 +91,21 @@ namespace LethalGargoyles.src.Utility
         /// True when <paramref name="level"/> would be emitted for <paramref name="cat"/>.
         /// Two integer comparisons and a dictionary hit - cheap enough for a per-frame guard.
         /// </summary>
-        internal static bool On(LogCat cat, LogLevel level)
+        internal static bool On(LogCat cat, LGLevel level)
         {
             if (!_enabled) return false;
-            LogLevel configured = Levels.TryGetValue(cat, out var l) ? l : _defaultLevel;
-            return configured != LogLevel.Off && level <= configured;
+            LGLevel configured = Levels.TryGetValue(cat, out var l) ? l : _defaultLevel;
+            return configured != LGLevel.Off && level <= configured;
         }
 
-        internal static void Error(LogCat cat, string msg) => Write(cat, LogLevel.Error, msg);
-        internal static void Warn(LogCat cat, string msg) => Write(cat, LogLevel.Warn, msg);
-        internal static void Info(LogCat cat, string msg) => Write(cat, LogLevel.Info, msg);
-        internal static void Debug(LogCat cat, string msg) => Write(cat, LogLevel.Debug, msg);
-        internal static void Trace(LogCat cat, string msg) => Write(cat, LogLevel.Trace, msg);
+        internal static void Error(LogCat cat, string msg) => Write(cat, LGLevel.Error, msg);
+        internal static void Warn(LogCat cat, string msg) => Write(cat, LGLevel.Warn, msg);
+        internal static void Info(LogCat cat, string msg) => Write(cat, LGLevel.Info, msg);
+        internal static void Debug(LogCat cat, string msg) => Write(cat, LGLevel.Debug, msg);
+        internal static void Trace(LogCat cat, string msg) => Write(cat, LGLevel.Trace, msg);
 
         /// <summary>Emits once per <paramref name="key"/> per session. For "this should be impossible".</summary>
-        internal static void Once(LogCat cat, LogLevel level, string key, string msg)
+        internal static void Once(LogCat cat, LGLevel level, string key, string msg)
         {
             if (!On(cat, level)) return;
             if (!FiredOnce.Add(key)) return;
@@ -125,10 +125,10 @@ namespace LethalGargoyles.src.Utility
             if (condition) return;
             if (!_enabled) return;
             if (!FiredOnce.Add("INV:" + key)) return;
-            Emit(LogLevel.Error, $"{Prefix(cat)} INVARIANT VIOLATED: {msg}");
+            Emit(LGLevel.Error, $"{Prefix(cat)} INVARIANT VIOLATED: {msg}");
         }
 
-        private static void Write(LogCat cat, LogLevel level, string msg)
+        private static void Write(LogCat cat, LGLevel level, string msg)
         {
             if (!On(cat, level)) return;
 
@@ -160,12 +160,12 @@ namespace LethalGargoyles.src.Utility
             return $"[{side}][{cat}]";
         }
 
-        private static void Emit(LogLevel level, string line)
+        private static void Emit(LGLevel level, string line)
         {
             switch (level)
             {
-                case LogLevel.Error: Plugin.Logger.LogError(line); break;
-                case LogLevel.Warn: Plugin.Logger.LogWarning(line); break;
+                case LGLevel.Error: Plugin.Logger.LogError(line); break;
+                case LGLevel.Warn: Plugin.Logger.LogWarning(line); break;
                 default: Plugin.Logger.LogInfo(line); break;
             }
         }
