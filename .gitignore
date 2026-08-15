@@ -1,0 +1,41 @@
+# Repo-root ignore rules.
+#
+# The subtrees keep their own, and those stay authoritative for their own contents:
+#   Plugin/.gitignore        - VS/.NET build output, *.user, .vs/, Thunderstore/Packages/*.zip
+#   UnityProject/.gitignore  - Library/, Temp/, Logs/, UserSettings/, generated csproj/sln
+#   AssetSources/.gitignore  - Blender *.blend1 backups
+#
+# This file covers what none of them can: the repo root itself, and anything that
+# turns up in a NEW top-level folder later. Without it, `git add -A` from the root
+# reaches straight into the tool scratch directories below.
+
+# Claude Code scratch. The agents and skills in .claude/ ARE meant to be tracked -
+# a worktree is a full second checkout of this repo and must never be committed into it.
+.claude/worktrees/
+
+# Editor / IDE (both subtree ignores already exclude these for their own trees)
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build output, wherever it appears
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+
+# Python bytecode - the Audacity export scripts in AssetSources/Audio generate this
+__pycache__/
+*.pyc
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+# Editor backups. Written as *.*~ and NOT *~ on purpose: a bare *~ also matches Unity's
+# `Documentation~` convention and would have ignored a tracked package folder.
+*.*~

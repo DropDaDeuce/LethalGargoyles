@@ -1,0 +1,45 @@
+# Repo-root attributes.
+#
+# Plugin/ and UnityProject/ each already declare `* text=auto`; this extends the same
+# normalisation to the root and to AssetSources/, which had no coverage at all.
+#
+# WHY THE EXPLICIT BINARY LIST BELOW: core.autocrlf is true on this machine, so with
+# `text=auto` git decides text-vs-binary by sniffing content. Anything it guesses wrong
+# gets CRLF injected on checkout, which silently corrupts an audio file, a Blender scene,
+# or the asset bundle. The files listed here are declared binary so no guess is involved.
+
+* text=auto
+
+# The asset bundle has NO extension, so it is the one most exposed to a bad guess.
+gargoyleassets binary
+*.bundle binary
+
+# Audio (shipped OGG + Audacity project sources, which are SQLite databases)
+*.ogg binary
+*.aup3 binary
+*.wav binary
+*.mp3 binary
+
+# Art sources and images
+*.blend binary
+*.blend1 binary
+*.xcf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.tga binary
+*.psd binary
+
+# Documents and archives
+*.xlsx binary
+*.docx binary
+*.zip binary
+
+# Assemblies and debug symbols
+*.dll binary
+*.pdb binary
+*.exe binary
+
+# Text formats that must keep LF regardless of platform
+*.sh text eol=lf
+*.py text eol=lf

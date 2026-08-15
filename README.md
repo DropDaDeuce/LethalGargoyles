@@ -40,7 +40,8 @@ This is my first experience with Unity, C#, models, and animations. Any suggesti
 **1. Audio Format and Location**
 
 - All custom voice lines **must be in OGG format**. Other formats (MP3, WAV, etc.) are not supported.
-- Place your custom OGG files in the **"Custom Voice Lines"** folder located within your Lethal Company game directory (e.g., `C:\Program Files (x86)\Steam\steamapps\common\Lethal Company\Custom Voice Lines`).
+- Place your custom OGG files in the **"Custom Voice Lines"** folder, which lives inside a **"Lethal Gargoyles"** folder in your Lethal Company game directory (e.g., `C:\Program Files (x86)\Steam\steamapps\common\Lethal Company\Lethal Gargoyles\Custom Voice Lines`).
+- The mod creates that folder, and a subfolder for every category below, the first time it runs — so launch the game once with the mod installed and the folders will be waiting for you.
 - **Do not** place custom voice lines in the "Voice Lines" folder.
 - There is a maximum size of **500KB** on the OGG files due to Steam networking limitations on network messages.
 
@@ -309,7 +310,9 @@ The gargoyle's taunts are categorized as follows:
 
 ## To Do
 - 1 more taunt for each employee class.
-- Add 
+- A mechanic for the Gargoyle to steal items, with a config option to turn it off.
+- Gargoyle scrap that taunts, quieter than the monster itself.
+- An activity taunt for playing a boombox near the Gargoyle.
 - **MAYBE** add Mirage integration. Gargoyle "Repeats" voice lines in a mocking manner. (Depends on difficulty and time to implement)
 - Thinking of new ways to make the Gargoyle michievous without it being overbearing.
 
