@@ -1216,7 +1216,13 @@ namespace LethalGargoyles.src.Enemy
                         break;
 
                     case SmartDestinationType.EntranceTeleport:
-                        agent.Warp(dest.EntranceTeleport.exitPoint.position);
+                        // EntranceTeleport.exitPoint was removed from the game; the far side is now
+                        // reached through exitScript (the paired teleport) and its entrancePoint.
+                        // FindExitPoint() resolves that pairing and returns false when there isn't
+                        // one, which is also the null guard the old exitPoint read never had.
+                        EntranceTeleport entrance = dest.EntranceTeleport;
+                        if (entrance.FindExitPoint() && entrance.exitScript != null)
+                            agent.Warp(entrance.exitScript.entrancePoint.position);
                         break;
 
                     case SmartDestinationType.Elevator:

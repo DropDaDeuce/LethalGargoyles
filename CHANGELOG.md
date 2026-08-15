@@ -1,3 +1,8 @@
+## Unreleased
+
+**Game Compatibility:**
+- Fixed the Gargoyle failing to build against the current version of Lethal Company. The game removed `EntranceTeleport.exitPoint`, which the Gargoyle used to find the far side of an entrance when teleporting; it now resolves the paired entrance the way the game does. **Not yet verified in a live round.**
+
 ## v0.7.0 - The Gargoyle Is Back!
 
 **AI Improvements:**
