@@ -1,7 +1,24 @@
 # Optimization & Improvement Audit — findings and batch plan
 
-**Status: LIVE.** Produced 2026-08-15 by board batch **b5**, phase 1 of the improve/optimize pass.
-**Nothing in this document has been applied.** It is read-only findings plus a proposed batch order.
+**Status: LIVE, PARTIALLY APPLIED.** Produced 2026-08-15 by board batch **b5**, phase 1 of the improve/optimize pass.
+
+> ## APPLIED 2026-08-15 by board batch b8 — read this before acting on anything below
+>
+> Mathew directed a batch run while away, accepting the risk. **Five commits landed, one per batch, so any single batch reverts in isolation.** Every one is **compile-verified only — 0 warnings, 0 errors in Debug AND Release — and NONE of it has ever been run.**
+>
+> | Commit | Covers |
+> |---|---|
+> | `61cc313` | **Batch A** — `LGLog`, crash guards, all statue fixes (incl. C1, E11, E12) |
+> | `0a9ff00` | **Batch E (partial)** — E1, E2, E3, E4, E5, E9, E10, D3, G12 |
+> | `3f92b72` | **Batch F** — F1, F2, F3, F6, A9, A10 |
+> | `a1dac4b` | **Batches C/D/G (partial)** — C2, D1, D2, D4, G3, G4 |
+>
+> **NOT applied, and deliberately so:**
+> - **Batch B, the partial-class split.** Skipped: it would have consumed the session's remaining budget rewriting 2,900 lines for zero behaviour gain, and its entire purpose was to make *later* diffs readable — the later diffs happened first. **It is still worth doing, and it is now a bigger job**, because four commits have landed on top. Do it as its own session.
+> - **C3, the push/damage owner-authority fix.** This is the only top-tier finding still open and it stays open on purpose: it is the one marked **PLAUSIBLE**, it rewrites how damage reaches players, and it cannot be verified without a second machine. Shipping an unverified rewrite of the damage path autonomously was a worse bet than leaving a known bug documented.
+> - **D5, D6, D7, E6 (already correct), E7, E8, F4, F5, F7, F8, F9, G1, G2, G5–G11, H2, H4–H8.**
+>
+> **One thing found while fixing E2 that is not in the original audit:** `GetTargetPosition` computed `targetZone` *before* the left/right decision, so once the distances actually differed the "left wins" branch still returned the **right** zone. It was unreachable only because E2 kept both distances equal. Fixing E2 alone would have swapped one bug for another; both went in together.
 
 **How this was produced:** six parallel read-only audits over `Plugin\src\**` — AI hot paths, state machine + the shared static layer, the audio/voice-line subsystem end to end, Harmony patches + soft deps + the entry point, config + scrap + packaging, and a structural map of `LethalGargoylesAI.cs` for the partial-class split. Every finding below was traced in code by the agent that reported it. Where two agents found the same defect independently it is marked **×2** — that is corroboration, and those are the safest bets in the document.
 
