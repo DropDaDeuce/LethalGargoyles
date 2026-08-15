@@ -1,7 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using BepInEx.Configuration;
+using LethalGargoyles.src.Utility;
 
 namespace LethalGargoyles.src.Config
 {
@@ -73,6 +75,61 @@ namespace LethalGargoyles.src.Config
                                  "Cooldown For Dog Taunt",
                                  300f,
                                  "Sets the cooldown between dog taunts in seconds. Default is 300(5 minutes).");
+        // Split out of "Enemy Distance Warning" - the statue reused that setting for a completely
+        // different mechanic (how close the dog must be to hear the statue), so one slider was
+        // silently tuning two things at once. Default matches the old shared value.
+        public ConfigEntry<int> dogHearDist = cfg.Bind("Scrap",
+                                 "Dog Hearing Distance",
+                                 45,
+                                 "How close an Eyeless Dog must be to hear the Gargoyle Statue talk. Previously this shared the General > Enemy Distance Warning setting; it is now separate so the two can be tuned independently.");
+
+        // --- Diagnostics -----------------------------------------------------------------
+        // Runtime-gated logging. Live in RELEASE on purpose: a player chasing a bug can turn one
+        // category up and send a log, without anyone shipping them a DEBUG build.
+        public ConfigEntry<bool> diagEnabled = cfg.Bind("Diagnostics",
+                                 "Enabled",
+                                 true,
+                                 "Master switch for diagnostic logging. When false, nothing below has any effect.");
+        public ConfigEntry<LogLevel> diagDefaultLevel = cfg.Bind("Diagnostics",
+                                 "Default Level",
+                                 LogLevel.Warn,
+                                 "Log level used for any category not overridden below.\nOff < Error < Warn < Info < Debug < Trace. Debug is the useful level when chasing a bug; Trace is a firehose.");
+        public ConfigEntry<bool> diagIncludeContext = cfg.Bind("Diagnostics",
+                                 "Include Context",
+                                 true,
+                                 "Prefix each line with [H] or [C] for host/client and the category name. Strongly recommended - a lot of this mod's bugs only happen on one side.");
+        public ConfigEntry<int> diagRepeatLimit = cfg.Bind("Diagnostics",
+                                 "Repeat Limit",
+                                 20,
+                                 "Suppress an identical message after this many occurrences in a round, so a per-frame problem cannot bury the rest of the log. 0 disables suppression.");
+
+        public readonly Dictionary<LogCat, ConfigEntry<LogLevel>> diagCategoryLevels = [];
+
+        /// <summary>
+        /// Binds one level entry per category and pushes the whole set into <see cref="LGLog"/>.
+        /// Called from Plugin.Awake before anything that might want to log.
+        /// </summary>
+        public void InitializeDiagnostics()
+        {
+            var levels = new Dictionary<LogCat, LogLevel>();
+            foreach (LogCat cat in Enum.GetValues(typeof(LogCat)))
+            {
+                if (cat == LogCat.None) continue;
+                var entry = cfg.Bind("Diagnostics",
+                                     cat.ToString(),
+                                     LogLevel.Warn,
+                                     $"Log level for the {cat} subsystem.");
+                diagCategoryLevels[cat] = entry;
+                levels[cat] = entry.Value;
+            }
+
+            LGLog.Configure(
+                diagEnabled.Value,
+                diagDefaultLevel.Value,
+                levels,
+                diagIncludeContext.Value,
+                diagRepeatLimit.Value);
+        }
 
         public static Dictionary<string, ConfigEntry<bool>> AudioClipEnableConfig { get; set; } = [];
 
@@ -102,10 +159,31 @@ namespace LethalGargoyles.src.Config
         public void ClearUnusedEntries(ConfigFile cfg)
         {
             // Normally, old unused config entries don't get removed, so we do it with this piece of code. Credit to Kittenji.
-            PropertyInfo orphanedEntriesProp = cfg.GetType().GetProperty("OrphanedEntries", BindingFlags.NonPublic | BindingFlags.Instance);
-            var orphanedEntries = (Dictionary<ConfigDefinition, string>)orphanedEntriesProp.GetValue(cfg, null);
-            orphanedEntries.Clear(); // Clear orphaned entries (Unbinded/Abandoned entries)
-            cfg.Save(); // Save the config file to save these changes
+            //
+            // This reflects on a PRIVATE, undocumented BepInEx property. GetProperty returns null
+            // rather than throwing if it is ever renamed, and the old code then called GetValue on
+            // that null - an NRE that escaped Awake and skipped everything after it, including
+            // scrap registration and the footstep cache. The symptom ("statue never spawns") was
+            // nowhere near the cause. Degrade to "pruning skipped" instead.
+            try
+            {
+                PropertyInfo? orphanedEntriesProp = cfg.GetType().GetProperty("OrphanedEntries", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (orphanedEntriesProp == null)
+                {
+                    LGLog.Warn(LogCat.Config, "BepInEx's private OrphanedEntries property was not found - stale config entries will not be pruned. Harmless, but it means BepInEx changed under the mod.");
+                    return;
+                }
+
+                if (orphanedEntriesProp.GetValue(cfg, null) is Dictionary<ConfigDefinition, string> orphanedEntries)
+                {
+                    orphanedEntries.Clear(); // Clear orphaned entries (Unbinded/Abandoned entries)
+                }
+                cfg.Save(); // Save the config file to save these changes
+            }
+            catch (Exception ex)
+            {
+                LGLog.Warn(LogCat.Config, $"Config pruning skipped: {ex.GetType().Name}: {ex.Message}");
+            }
         }
     }
 }

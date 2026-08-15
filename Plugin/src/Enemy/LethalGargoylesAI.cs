@@ -196,6 +196,17 @@ namespace LethalGargoyles.src.Enemy
         private const float AGGRO_EVAL_INTERVAL = 0.20f; // 5Hz; tune 0.15–0.35
         private const float HIDE_EVAL_INTERVAL = 0.35f; // tune 0.25–0.6
 
+        /// <summary>
+        /// Default sight range for <see cref="CanSeePlayer"/>, as a SQUARED distance.
+        ///
+        /// 120 squared-units = <b>10.95 metres</b>, NOT 120 metres. This trips people up because
+        /// the value reads like a distance while it is compared against sqrMagnitude, and both
+        /// per-frame callers use the default. 10.95m is the intended behaviour and has shipped
+        /// this way - do NOT "fix" this to 14400 without deciding that deliberately, because it
+        /// would turn a ~11m awareness bubble into a 120m one.
+        /// </summary>
+        public const int DEFAULT_SIGHT_RANGE_SQR = 120;
+
         // Static collections/caches
         public static readonly HashSet<string> trackedItems =
         [
@@ -2084,7 +2095,7 @@ namespace LethalGargoyles.src.Enemy
             return Vector3.Angle(player.transform.forward, to) < 68f;
         }
 
-        public bool CanSeePlayer(PlayerControllerB player, float width = 180f, int rangeSqr = 120, int proximityAwarenessSqr = -1)
+        public bool CanSeePlayer(PlayerControllerB player, float width = 180f, int rangeSqr = DEFAULT_SIGHT_RANGE_SQR, int proximityAwarenessSqr = -1)
         {
             if (player.isPlayerDead || !player.isPlayerControlled) return false;
 
@@ -2451,7 +2462,7 @@ namespace LethalGargoyles.src.Enemy
         {
             base.KillEnemy(destroy);
             Collider col = transform.GetComponent<Collider>();
-            col.enabled = false;
+            if (col != null) col.enabled = false;
             gargoyleTargets.TryRemove(myID, out _);
 
             foreach (var player in playerPushStates)
@@ -2459,15 +2470,27 @@ namespace LethalGargoyles.src.Enemy
                 player.Value.TryRemove(myID, out _);
             }
 
-            int randomIndex = UnityEngine.Random.Range(0, Utility.AudioManager.deathClips.Count());
-            TauntClientRpc(Utility.AudioManager.deathClips[randomIndex].name, "death");
-
+            // Cleanup FIRST. This used to sit below the death taunt, and three separate things
+            // in that taunt could throw before reaching it - an empty deathClips list on a client
+            // that missed the audio transfer, an RPC send after base.KillEnemy already despawned
+            // the NetworkObject, or a null Collider. Any of them left this instance in
+            // activeGargoyles with its search coroutine still running on a corpse.
             if (searchCoroutine != null)
             {
                 StopCoroutine(searchCoroutine);
             }
-
             activeGargoyles.Remove(this);
+
+            var deathClips = Utility.AudioManager.deathClips;
+            if (IsServer && NetworkObject != null && NetworkObject.IsSpawned && deathClips.Count > 0)
+            {
+                int randomIndex = UnityEngine.Random.Range(0, deathClips.Count);
+                TauntClientRpc(deathClips[randomIndex].name, "death");
+            }
+            else if (deathClips.Count == 0)
+            {
+                LGLog.Warn(LogCat.Audio, $"{GargoyleTag} died with no death clips loaded - no death line will play. On a client this usually means the audio transfer for 'Taunt - Gargoyle Death' never completed.");
+            }
         }
 
         // ============================================================
@@ -2726,7 +2749,10 @@ namespace LethalGargoyles.src.Enemy
                 int randomIndex = UnityEngine.Random.Range(0, clipList.Count);
                 if (randomIndex == lastTaunt)
                 {
-                    randomIndex++;
+                    // Wrap, don't increment. A bare ++ walks off the end whenever the draw is the
+                    // last index AND equals lastTaunt - 1/Count^2 per call, which is 25% on the
+                    // two-clip Hit pool, and guaranteed if a player disables all but one clip.
+                    randomIndex = (randomIndex + 1) % clipList.Count;
                 }
                 lastTaunt = randomIndex;
                 TauntClientRpc(clipList[randomIndex].name, clipType);
@@ -2791,13 +2817,23 @@ namespace LethalGargoyles.src.Enemy
             }
         }
 
+        /// <summary>
+        /// Resolves a clip the sender already picked by exact name.
+        ///
+        /// This used to be a StartsWith prefix match, which returned the first prefix hit in list
+        /// order. The shipped set contains taunt_priordeath_EnemyForestGiant and
+        /// ...EnemyForestGiantEaten, and it only resolved correctly because alphabetical order
+        /// happens to put the shorter one first. A custom line named as a prefix of a shipped one
+        /// would make a client play a different sentence than the host chose.
+        /// ChooseRandomClip still uses StartsWith - it genuinely needs prefix semantics.
+        /// </summary>
         public static AudioClip? FindClip(string clipName, List<AudioClip> clips)
         {
-            string lowerClipName = clipName.ToLowerInvariant();
-
             foreach (AudioClip clip in clips)
             {
-                if (clip.name.ToLowerInvariant().StartsWith(lowerClipName))
+                // Fully qualified: a bare `using System;` in this file makes `Random` ambiguous
+                // against UnityEngine.Random, which is used unqualified in five places.
+                if (string.Equals(clip.name, clipName, System.StringComparison.OrdinalIgnoreCase))
                 {
                     return clip;
                 }
@@ -2890,10 +2926,25 @@ namespace LethalGargoyles.src.Enemy
 
             if (clipList.Count > 0 && clip != null)
             {
-                LogIfDebugBuild(clipType + " taunt: " + clip.name);
+                LGLog.Debug(LogCat.Taunt, $"{GargoyleTag} {clipType} taunt: {clip.name}");
                 RoundManager.Instance.PlayAudibleNoise(base.transform.position, creatureVoice.maxDistance / 3f, creatureVoice.volume);
                 creatureVoice.PlayOneShot(clip);
                 StartCoroutine(PlayNoiseWhileTalking());
+            }
+            else
+            {
+                // THE mod's signature failure. Clips travel by name and are resolved against the
+                // receiving client's own list; a miss used to fall off the end of this method in
+                // total silence, with the only diagnostic behind [Conditional("DEBUG")]. Every
+                // upstream audio bug - a transfer that never completed, a clip over the size cap,
+                // a half-decoded stereo file, an unknown clipType - lands here looking identical,
+                // and the player just reports "the gargoyle isn't talking".
+                LGLog.Warn(LogCat.Audio,
+                    $"{GargoyleTag} taunt '{clipName}' (type '{clipType}') did not resolve locally - " +
+                    $"this machine has {clipList.Count} clip(s) for that type. " +
+                    (clipList.Count == 0
+                        ? "The list is EMPTY, which means either the audio transfer for this category never completed or the clipType is not one this build knows."
+                        : "The clip is missing from this machine's list, so the audio transfer was incomplete."));
             }
         }
 

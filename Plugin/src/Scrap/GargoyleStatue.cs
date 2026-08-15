@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using LethalGargoyles.src.Utility;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -17,21 +18,28 @@ namespace LethalGargoyles.src.Scrap
 
         AudioSource? scrapAudio;
 
-        private static int lastTaunt = 0;
-        private float distWarnSqr = 0f;
+        // Instance, not static. These were static, so every statue in a level shared one "last
+        // clip played" index and one dog-taunt cooldown - activating statue A silenced statue B
+        // for reasons unrelated to B. Unlike the AI's deliberate cross-instance layer, that
+        // sharing was never intended.
+        private int lastTaunt = 0;
+        private float dogHearDistSqr = 0f;
         private float dogCooldown = 0f;
         private bool dogHear = false;
         private float lastDogCheck = 0f;
-        private static float lastDogTaunt = 0f;
+        private float lastDogTaunt = 0f;
 
         public override void Start()
         {
             base.Start();
             scrapAudio = base.GetComponentInParent<AudioSource>();
-            distWarnSqr = Plugin.BoundConfig.distWarn.Value;
+            // Own setting now. This used to read General > Enemy Distance Warning, which is the
+            // gargoyle's enemy-warning range - a completely different mechanic that happened to
+            // share one slider.
+            dogHearDistSqr = Plugin.BoundConfig.dogHearDist.Value;
             dogCooldown = Plugin.BoundConfig.dogCooldown.Value;
             dogHear = Plugin.BoundConfig.dogHear.Value;
-            distWarnSqr *= distWarnSqr;
+            dogHearDistSqr *= dogHearDistSqr;
             lastDogTaunt =  Time.time - dogCooldown;
         }
 
@@ -40,14 +48,18 @@ namespace LethalGargoyles.src.Scrap
             base.Update();
             if (scrapAudio != null)
             {
-                if (dogHear && Time.time - lastDogTaunt > dogCooldown && Time.time - lastDogCheck > 1f && !scrapAudio.isPlaying)
+                // GrabbableObject.Update runs on every machine, so this must not fire a ClientRpc
+                // from a client - NGO throws "only the server can invoke a ClientRpc" and the
+                // taunt is lost. The dog-detection decision is a gameplay decision and belongs on
+                // the server anyway.
+                if (IsServer && dogHear && Time.time - lastDogTaunt > dogCooldown && Time.time - lastDogCheck > 1f && !scrapAudio.isPlaying)
                 {
                     lastDogCheck = Time.time;
                     if (DogNearStatue())
                     {
                         if (Enemy.LethalGargoylesAI.ChooseRandomClip("taunt_enemy_Mouthdog", "Enemy", out string? clip))
                         {
-                            if (clip != null)
+                            if (clip != null && NetworkObject != null && NetworkObject.IsSpawned)
                             {
                                 lastDogTaunt = Time.time;
                                 TauntClientRpc(clip, "enemy");
@@ -63,7 +75,7 @@ namespace LethalGargoyles.src.Scrap
             foreach (EnemyAI enemy in RoundManager.Instance.SpawnedEnemies)
             {
                 float distanceSqr = (enemy.transform.position - transform.position).sqrMagnitude;
-                if (distanceSqr > distWarnSqr)
+                if (distanceSqr > dogHearDistSqr)
                     continue;
 
                 // Only care about Eyeless Dog
@@ -80,7 +92,12 @@ namespace LethalGargoyles.src.Scrap
         public override void ItemActivate(bool used, bool buttonDown = true)
         {
             base.ItemActivate(used, buttonDown);
-            if (IsServer && scrapAudio != null && !scrapAudio.isPlaying)
+            // NO IsServer GUARD HERE. ItemActivate runs on the client holding the item, and
+            // ItemActivateServerRpc is RequireOwnership = false precisely so that client can ask
+            // the server to act. Gating the SEND on IsServer meant only the host ever sent it, so
+            // any other player clicking the statue got nothing at all, with no log line.
+            // (The "guard every RPC send with IsServer" rule is for ClientRpcs, not ServerRpcs.)
+            if (scrapAudio != null && !scrapAudio.isPlaying)
             {
                 // Call the server RPC to handle the interaction
                 ItemActivateServerRpc(used, buttonDown);
@@ -95,13 +112,21 @@ namespace LethalGargoyles.src.Scrap
 
         public void GeneralTaunt()
         {
-            List<AudioClip> clipList = Utility.AudioManager.tauntClips;
+            // COPY the shared list. This used to alias AudioManager.tauntClips and then Add() to
+            // it, which permanently appended the holder's personal SteamID line into the global
+            // general-taunt pool - so the MONSTER started using someone's personal line as a
+            // generic insult, forever, at rising odds. And it then sent clipType "general", which
+            // no client could resolve the SteamID clip under, so they heard nothing at all.
+            List<AudioClip> clipList = new(Utility.AudioManager.tauntClips);
+            AudioClip? steamIdClip = null;
             if (playerHeldBy != null)
             {
-                AudioClip? playerClip = Enemy.LethalGargoylesAI.FindClip($"{playerHeldBy.playerSteamId}", Utility.AudioManager.playerClips);
-                if (playerClip != null)
+                steamIdClip = Enemy.LethalGargoylesAI.FindClip($"{playerHeldBy.playerSteamId}", Utility.AudioManager.playerClips);
+                if (steamIdClip != null)
                 {
-                    clipList.Add(playerClip);
+                    // Still just one candidate among the general lines, exactly as before - the
+                    // only change is that it goes into the local copy instead of the shared list.
+                    clipList.Add(steamIdClip);
                 }
             }
 
@@ -111,14 +136,20 @@ namespace LethalGargoyles.src.Scrap
                 int randomIndex = UnityEngine.Random.Range(0, clipList.Count);
                 if (randomIndex == lastTaunt)
                 {
-                    randomIndex++;
+                    // Wrap, don't increment - see the same fix in LethalGargoylesAI.OtherTaunt.
+                    randomIndex = (randomIndex + 1) % clipList.Count;
                 }
                 lastTaunt = randomIndex;
-                TauntClientRpc(clipList[randomIndex].name, "general");
+                AudioClip chosen = clipList[randomIndex];
+                // Send the type the receiving client will actually resolve it under. The SteamID
+                // clip lives in playerClips, not tauntClips, so announcing it as "general" meant
+                // every client failed to find it and played nothing.
+                string clipType = (steamIdClip != null && chosen == steamIdClip) ? "steamids" : "general";
+                TauntClientRpc(chosen.name, clipType);
             }
             else
             {
-                LogIfDebugBuild("General TAUNTS ARE NULL! WHY!?");
+                LGLog.Warn(LogCat.Scrap, "Gargoyle Statue was activated but the general taunt list is empty - nothing to play.");
                 return;
             }
         }
@@ -158,9 +189,19 @@ namespace LethalGargoyles.src.Scrap
 
             if (clipList.Count > 0 && clip != null && scrapAudio != null)
             {
-                LogIfDebugBuild(clipType + " taunt: " + clip.name);
+                LGLog.Debug(LogCat.Scrap, $"Statue {clipType} taunt: {clip.name}");
                 scrapAudio.PlayOneShot(clip);
                 if (dogHear) StartCoroutine(PlayNoiseWhileTalking());
+            }
+            else if (scrapAudio == null)
+            {
+                LGLog.Warn(LogCat.Scrap, "Gargoyle Statue has no AudioSource - it cannot play anything. The prefab is likely missing its AudioSource component.");
+            }
+            else
+            {
+                LGLog.Warn(LogCat.Audio,
+                    $"Statue taunt '{clipName}' (type '{clipType}') did not resolve locally - this machine has {clipList.Count} clip(s) for that type. " +
+                    "The audio transfer for that category was incomplete.");
             }
         }
 
