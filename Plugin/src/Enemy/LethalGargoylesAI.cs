@@ -482,7 +482,14 @@ namespace LethalGargoyles.src.Enemy
             if (!agent.enabled || !agent.isOnNavMesh) return;
             if (!IsOwner) return;
 
+            // #if DEBUG, not [Conditional]. LogIfSlow below is [Conditional("DEBUG")] so its
+            // CALLS vanish in Release - but the Stopwatch allocation and every
+            // `float t0 = (float)sw.Elapsed...` local are ordinary statements that do not, so a
+            // shipped build was allocating a Stopwatch and taking ~7 high-resolution timer
+            // readings per frame per gargoyle to feed calls that had been compiled away.
+#if DEBUG
             var sw = Stopwatch.StartNew();
+#endif
 
             if (_lastTarget != targetPlayer)
             {
@@ -492,21 +499,31 @@ namespace LethalGargoyles.src.Enemy
 
             if (Time.time - lastNodeCheckTime > nodeCheckInterval)
             {
+#if DEBUG
                 var t0 = (float)sw.Elapsed.TotalMilliseconds;
+#endif
                 CheckAndRefreshAINodes();
+#if DEBUG
                 LogIfSlow("CheckAndRefreshAINodes", (float)sw.Elapsed.TotalMilliseconds - t0);
+#endif
                 lastNodeCheckTime = Time.time;
             }
 
             {
+#if DEBUG
                 float t0 = (float)sw.Elapsed.TotalMilliseconds;
+#endif
                 HandleTargetPlayer();
+#if DEBUG
                 LogIfSlow("HandleTargetPlayer", (float)sw.Elapsed.TotalMilliseconds - t0);
+#endif
             }
 
             if (Time.time - lastSeenCheckTime > 0.33f)
             {
+#if DEBUG
                 float t0 = (float)sw.Elapsed.TotalMilliseconds;
+#endif
 
                 closestPlayer = GetClosestPlayer();
                 // MaxValue, not 0. A null closest player used to be recorded as distance zero -
@@ -521,40 +538,66 @@ namespace LethalGargoyles.src.Enemy
                     : float.MaxValue;
                 isSeen = GargoyleIsSeen(transform);
 
+#if DEBUG
                 LogIfSlow("Seen/Closest", (float)sw.Elapsed.TotalMilliseconds - t0,
                     $"closest={(closestPlayer != null ? closestPlayer.playerUsername : "null")} seen={isSeen}");
+#endif
 
                 lastSeenCheckTime = Time.time;
             }
 
             {
+#if DEBUG
                 float t0 = (float)sw.Elapsed.TotalMilliseconds;
+#endif
                 HandlePushStage();
+#if DEBUG
                 LogIfSlow("HandlePushStage", (float)sw.Elapsed.TotalMilliseconds - t0);
+#endif
             }
 
             {
+#if DEBUG
                 float t0 = (float)sw.Elapsed.TotalMilliseconds;
+#endif
                 HandleBehaviorState();
+#if DEBUG
                 LogIfSlow("HandleBehaviorState", (float)sw.Elapsed.TotalMilliseconds - t0, $"state={StateToString(currentBehaviourStateIndex)}");
+#endif
             }
 
             if (currentBehaviourStateIndex != (int)State.Idle)
             {
+#if DEBUG
                 float t0 = (float)sw.Elapsed.TotalMilliseconds;
+#endif
                 FollowSmartPath();
+#if DEBUG
                 LogIfSlow("FollowSmartPath", (float)sw.Elapsed.TotalMilliseconds - t0);
+#endif
             }
+#if DEBUG
             sw.Stop();
             LogIfSlow("UpdateTotal", (float)sw.Elapsed.TotalMilliseconds);
+#endif
         }
 
-        public override void DoAIInterval()
-        {
-            base.DoAIInterval();
 
-            if (Time.time >= _nextDoAiLogTime)
-            {
+        /// <summary>
+        /// Per-interval state dump. The ENTIRE body is compile-time stripped in Release.
+        ///
+        /// It used to live inline in DoAIInterval with only the final LogIfDebugBuild call
+        /// marked [Conditional("DEBUG")] - so a shipped build still built ~15 interpolated
+        /// strings into locals, boxed a couple of dozen values, and called agent.remainingDistance
+        /// (which forces the agent to walk its corner list) and pathingTask.GetResult(0) on the
+        /// live pathing task, every 3 seconds per gargoyle, purely to format text that was then
+        /// discarded. This is exactly the leak [Conditional] does not protect against.
+        /// </summary>
+        [Conditional("DEBUG")]
+        private void LogAiIntervalState()
+        {
+            if (Time.time < _nextDoAiLogTime) return;
+
                 _nextDoAiLogTime = Time.time + 3.0f; // tune: 0.5–2s
                 string stateName = StateToString(currentBehaviourStateIndex);
                 string netInfo = $"Owner={IsOwner} Server={IsServer} Spawned={(NetworkObject != null && NetworkObject.IsSpawned)}";
@@ -645,7 +688,13 @@ namespace LethalGargoyles.src.Enemy
                     $"{perceptionInfo} | {killInfo} | {pushMapInfo} | " +
                     $"{agentInfo} | {smartInfo} | {doorInfo}"
                 );
-            }
+                    }
+
+        public override void DoAIInterval()
+        {
+            base.DoAIInterval();
+
+            LogAiIntervalState();
 
             if (isEnemyDead || StartOfRound.Instance.allPlayersDead)
             {
@@ -773,10 +822,39 @@ namespace LethalGargoyles.src.Enemy
             CleanupSmartPathing();
         }
 
+        public override void OnNetworkDespawn()
+        {
+            // Nothing used to clean up per-instance entries when the crew SURVIVED a round.
+            // ClearAllVariables' only caller is the allPlayersDead branch of DoAIInterval, and the
+            // two round-end hooks in AIHelperPatches are commented out - so a gargoyle despawned
+            // mid-PushTarget left playerPushStates[player][itsID] == true forever. Every future
+            // gargoyle's HandlePushTarget then saw a foreign `true` and deferred by 10s, on
+            // repeat: that player became un-pushable for the rest of the SESSION, on every
+            // subsequent moon.
+            RemoveSelfFromSharedState();
+            base.OnNetworkDespawn();
+        }
+
         public override void OnDestroy()
         {
+            RemoveSelfFromSharedState();
             CleanupSmartPathing();
             base.OnDestroy();
+        }
+
+        /// <summary>
+        /// Removes ONLY this instance's footprint from the shared static layer. Safe to call more
+        /// than once, and deliberately does not touch the shared caches - other gargoyles may
+        /// still be alive and using them.
+        /// </summary>
+        private void RemoveSelfFromSharedState()
+        {
+            gargoyleTargets.TryRemove(myID, out _);
+            foreach (var kvp in playerPushStates)
+            {
+                kvp.Value.TryRemove(myID, out _);
+            }
+            activeGargoyles.Remove(this);
         }
 
         private void CleanupSmartPathing()
@@ -795,17 +873,33 @@ namespace LethalGargoyles.src.Enemy
             _smartRegistered = false;
         }
 
-        private void ClearAllVariables()
+        /// <summary>
+        /// Full reset of the shared static layer. This is a ROUND-END operation.
+        ///
+        /// It was being called from any gargoyle's DoAIInterval on every tick while allPlayersDead,
+        /// which wiped caches out from under gargoyles that were still alive: clearing
+        /// activeGargoyles made survivors talk over each other, and clearing the railing and
+        /// kill-trigger caches meant FindNearestKillTrigger returned null so the push gate
+        /// (distToKillTriggerSqr &lt;= 4f) could never pass again. The AI node lists were worse -
+        /// unrecoverable, because RefreshNodesIfNull only refills when a cached entry is null, and
+        /// an EMPTY list has no null entries.
+        /// </summary>
+        private static void ClearAllVariables()
         {
             activeGargoyles.Clear();
-            gargoyleTargets[myID] = null;
+            gargoyleTargets.Clear();
             playerPushStates.Clear();
-            playerClasses.Clear();
+            // playerClasses is per-instance and is repopulated in Start; it is not shared state.
             cachedOutsideAINodes.Clear();
             cachedInsideAINodes.Clear();
             cachedAllAINodes.Clear();
             cachedKillTriggerInfos.Clear();
             cachedRailings.Clear();
+            // Activity taunts persisted across moons and across lobbies because nothing ever
+            // called this - RemoveActivity fires for PickedUpItem and InFacility but never for
+            // KilledEnemy, so "you killed a Bracken" stayed valid all session.
+            ClearAllPlayerData();
+            LGLog.ResetRound();
         }
 
         // ============================================================
@@ -2193,7 +2287,10 @@ namespace LethalGargoyles.src.Enemy
 
         private void RefreshNodesIfNull(List<GameObject> cachedNodes, IEnumerable<GameObject> sourceNodes, string nodeType)
         {
-            bool nullNodesFound = cachedNodes.Any(node => node == null);
+            // `Count == 0` matters as much as the null check: once ClearAllVariables emptied these
+            // lists, an empty list has no null entries, so the old condition was false forever and
+            // the node caches could never refill without a fresh Start().
+            bool nullNodesFound = cachedNodes.Count == 0 || cachedNodes.Any(node => node == null);
 
             if (nullNodesFound && sourceNodes.Any())
             {
@@ -2582,13 +2679,29 @@ namespace LethalGargoyles.src.Enemy
         // 12) Taunts / audio
         // ============================================================
 
+        /// <summary>
+        /// Single choke point for the combat voice lines (attack / hit / player death).
+        ///
+        /// Its callers - HitEnemy, KillEnemy and OnCollideWithPlayer - are NOT server-only.
+        /// Vanilla drives HitEnemy and KillEnemy through ClientRpcs so they run on every machine,
+        /// and OnCollideWithPlayer runs on the colliding player's client. Sending a ClientRpc from
+        /// there makes NGO throw "Only the server can invoke a ClientRpc" on every non-host
+        /// machine, once per shovel hit - log spam that buries the real audio diagnostics, and the
+        /// taunt does not fire anyway. SetAnim already guards this way; the taunt sends never did.
+        /// </summary>
         public void PlayVoice(List<AudioClip> clipList, string clipType, AudioClip? clip = null)
         {
+            if (!IsServer || NetworkObject == null || !NetworkObject.IsSpawned) return;
+
             if (clip == null && clipList.Count > 0)
             {
                 int randInt = UnityEngine.Random.Range(0, clipList.Count);
-                LogIfDebugBuild($"{clipType} count is : {clipList.Count} | Index: {randInt}");
+                LGLog.Debug(LogCat.Taunt, $"{GargoyleTag} {clipType} voice ({clipList.Count} available)");
                 TauntClientRpc(clipList[randInt].name, clipType, true);
+            }
+            else if (clipList.Count == 0)
+            {
+                LGLog.Warn(LogCat.Audio, $"{GargoyleTag} wanted a '{clipType}' line but that list is empty on the host - nothing will play anywhere.");
             }
         }
 
