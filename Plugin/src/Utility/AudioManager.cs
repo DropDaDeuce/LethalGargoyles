@@ -15,6 +15,14 @@ using LethalGargoyles.src.Config;
 namespace LethalGargoyles.src.Utility;
 public class AudioManager : NetworkBehaviour
 {
+    /// <summary>
+    /// Per-clip wire size limit. The host pushes raw OGG bytes to each client over
+    /// CustomMessagingManager; anything larger than this is skipped for that client.
+    /// The HOST must apply the same limit when loading locally, or the two sides end up with
+    /// different clip lists and every taunt naming a host-only clip fails silently on clients.
+    /// </summary>
+    public const int MaxClipBytes = 512000;
+
     public static List<AudioClip> tauntClips = [];
     public static List<AudioClip> aggroClips = [];
     public static List<AudioClip> enemyClips = [];
@@ -168,10 +176,15 @@ public class AudioManager : NetworkBehaviour
                     if (configEntry.Value)
                     {
                         byte[]? audioData = AudioFileToByteArray(fileName);
-                        if (audioData?.Length > 512000)
+                        if (audioData?.Length > MaxClipBytes)
                         {
-                            Plugin.Logger.LogError($"Sending Clip({clipName}) failed. Max clip size is 512000 bytes or 500KB");
-                            break;
+                            // continue, NOT break. A single oversized file used to abandon every
+                            // remaining clip in its category for that client, while the host - whose
+                            // load path has no size check at all - still had all of them. The two
+                            // sides then disagreed about what existed, and every taunt naming a
+                            // missing clip failed silently on the client.
+                            Plugin.Logger.LogError($"Skipping Clip({clipName}): {audioData?.Length} bytes exceeds the {MaxClipBytes} byte (500KB) limit. Remaining clips in '{category}' will still be sent.");
+                            continue;
                         }
                         else if (audioData != null)
                         {
@@ -196,10 +209,11 @@ public class AudioManager : NetworkBehaviour
 
                     // Send the audio clip even if no config entry was found
                     byte[]? audioData = AudioFileToByteArray(fileName);
-                    if (audioData?.Length > 512000)
+                    if (audioData?.Length > MaxClipBytes)
                     {
-                        Plugin.Logger.LogError($"Sending Clip({clipName}) failed. Max clip size is 512000 bytes or 500KB");
-                        break;
+                        // continue, not break - see the note above.
+                        Plugin.Logger.LogError($"Skipping Clip({clipName}): {audioData?.Length} bytes exceeds the {MaxClipBytes} byte (500KB) limit. Remaining clips in '{category}' will still be sent.");
+                        continue;
                     }
                     else if (audioData != null)
                     {
@@ -344,13 +358,25 @@ public class AudioManager : NetworkBehaviour
 
             using var vorbis = new NVorbis.VorbisReader(new MemoryStream(audioData, false));
 
-            var audioBuffer = new float[vorbis.TotalSamples]; // Just dump everything
-            AudioClip clip = AudioClip.Create(clipName, (int)(vorbis.TotalSamples / vorbis.Channels), vorbis.Channels, vorbis.SampleRate, false);
-            int read = vorbis.ReadSamples(audioBuffer, 0, (int)vorbis.TotalSamples);
+            // NVorbis units: TotalSamples is PER CHANNEL, while ReadSamples' count is a number of
+            // INTERLEAVED float values. The old code allocated float[TotalSamples] and read
+            // TotalSamples values, which happens to be exactly right for mono (channels == 1) and
+            // exactly HALF for stereo - so a stereo clip decoded to half its length and cut off
+            // mid-sentence on every client, while the host, which loads through
+            // DownloadHandlerAudioClip on a different path, heard it whole.
+            int channels = vorbis.Channels;
+            int samplesPerChannel = (int)vorbis.TotalSamples;
+            var audioBuffer = new float[samplesPerChannel * channels];
+            AudioClip clip = AudioClip.Create(clipName, samplesPerChannel, channels, vorbis.SampleRate, false);
+            int read = vorbis.ReadSamples(audioBuffer, 0, audioBuffer.Length);
+            if (read < audioBuffer.Length)
+            {
+                LGLog.Warn(LogCat.Audio, $"Clip '{clipName}' decoded short: got {read} of {audioBuffer.Length} samples ({channels}ch). It will play truncated.");
+            }
             clip.SetData(audioBuffer, 0); // <-- your clip Remember to destroy when not use anymore
             List<AudioClip> clipList = GetClipListByCategory(category);
             clipList.Add(clip);
-            Plugin.Logger.LogInfo("Clip Loaded: " + clip.name);
+            LGLog.Info(LogCat.Audio, $"Clip loaded: {clip.name} ({channels}ch, {vorbis.SampleRate}Hz, {clip.length:0.00}s)");
             //StartOfRound.Instance.ship3DAudio.PlayOneShot(clip);
             yield break;
     }
@@ -368,6 +394,23 @@ public class AudioManager : NetworkBehaviour
                 string clipName = Path.GetFileNameWithoutExtension(fileName);
 
                 Plugin.Instance.LogIfDebugBuild($"Trying to load clip: {clipName}");
+
+                // Apply the SAME size limit the send path applies. Without this the host loads a
+                // clip that no client can ever receive, then names it in a TauntClientRpc that
+                // every client fails to resolve - which is invisible from the host's seat.
+                try
+                {
+                    var info = new FileInfo(fileName);
+                    if (info.Exists && info.Length > MaxClipBytes)
+                    {
+                        LGLog.Warn(LogCat.Audio, $"Skipping '{clipName}' locally too: {info.Length} bytes exceeds the {MaxClipBytes} byte limit, so no client can receive it. Re-export it smaller.");
+                        continue;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LGLog.Warn(LogCat.Audio, $"Could not stat '{fileName}': {ex.GetType().Name}. Loading anyway.");
+                }
 
                 // Try to get the config entry
                 if (PluginConfig.AudioClipEnableConfig.TryGetValue(clipName, out ConfigEntry<bool> configEntry))
@@ -451,7 +494,17 @@ public class AudioManager : NetworkBehaviour
     // In your AudioManager class
     public void LoadClipList(Dictionary<string, List<string>> defaultAudioClipFilePaths)
     {
-        AudioClipFilePaths = defaultAudioClipFilePaths; // Start with the defaults
+        // DEEP COPY. This used to alias Plugin.defaultAudioClipFilePaths by reference and then
+        // mutate it, and nothing ever cleared it - so every list this method appended to grew
+        // permanently, compounding on every lobby. With Coroner loaded that meant PriorDeath went
+        // 140 entries on the first lobby, 201 on the second, 262 on the third, each duplicate
+        // costing another AudioClip in host RAM AND another full network push to every client.
+        AudioClipFilePaths = [];
+        foreach (var cat in defaultAudioClipFilePaths)
+        {
+            AudioClipFilePaths[cat.Key] = new List<string>(cat.Value);
+        }
+
         foreach (var cat in AudioClipFilePaths)
         {
             string category = cat.Key;
@@ -486,14 +539,11 @@ public class AudioManager : NetworkBehaviour
             // Handle Coroner files if Coroner mod is loaded
             if (category == "PriorDeath" && Plugin.Instance.IsCoronerLoaded)
             {
-                FileInfo[] coronerDefaultFiles = GetMP3Files("Coroner", "Voice Lines");
+                // NOTE: the Coroner DEFAULTS are deliberately not added here. Plugin's
+                // GetDefaultAudioClipFilePaths already includes them, and adding them again is
+                // what produced 61 duplicate entries per lobby. This block handles CUSTOM Coroner
+                // files only.
                 FileInfo[] coronerCustomFiles = GetMP3Files("Coroner", "Custom Voice Lines");
-
-                // Add Coroner default files
-                foreach (FileInfo file in coronerDefaultFiles)
-                {
-                    fileNames.Add(file.FullName);
-                }
 
                 // Add Coroner custom files, replacing defaults if necessary
                 foreach (FileInfo customFile in coronerCustomFiles)
@@ -559,8 +609,6 @@ public class AudioManager : NetworkBehaviour
 
     public static FileInfo[] GetMP3Files(string type, string folderName)
     {
-        DirectoryInfo directoryInfo;
-
         string? folderLoc = folderName switch
         {
             "Voice Lines" => Path.Combine(Path.GetDirectoryName(Plugin.Instance.Info.Location),folderName),
@@ -568,46 +616,56 @@ public class AudioManager : NetworkBehaviour
             _ => Path.Combine(Path.GetDirectoryName(Plugin.Instance.Info.Location), folderName),
         };
         
-        switch (type)
+        // One table, one guarded read. This was twelve near-identical cases each calling
+        // GetFiles("*.*") on an unchecked DirectoryInfo, which had three problems:
+        //   1. "*.*" picked up Thumbs.db, .txt, .reapeaks - each minting a config toggle and an
+        //      "Unsupported audio file format" error. Only OGG survives the pipeline.
+        //   2. A missing folder threw DirectoryNotFoundException, which escaped OnNetworkSpawn
+        //      BEFORE LoadAudioClipsFromConfig() ran - so the host loaded ZERO clips and the
+        //      gargoyle went mute for the entire lobby, with only a raw stack trace to show why.
+        //   3. There was no "EmployeeClass" case, so three call sites asking for it silently got
+        //      an empty array. "Class" reads the same folder, which is the only reason custom
+        //      EmployeeClass lines worked at all.
+        string? subPath = type switch
         {
-            case "General":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - General"));
-                return directoryInfo.GetFiles("*.*");
-            case "Aggro":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Aggro"));
-                return directoryInfo.GetFiles("*.*");
-            case "Enemy":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Enemy"));
-                return directoryInfo.GetFiles("*.*");
-            case "PlayerDeath":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Player Death"));
-                return directoryInfo.GetFiles("*.*");
-            case "GargoyleDeath":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Gargoyle Death"));
-                return directoryInfo.GetFiles("*.*");
-            case "PriorDeath":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Prior Death"));
-                return directoryInfo.GetFiles("*.*");
-            case "Coroner":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Prior Death", "Coroner"));
-                return directoryInfo.GetFiles("*.*");
-            case "Class":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - EmployeeClass"));
-                return directoryInfo.GetFiles("*.*");
-            case "Activity":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - Activity"));
-                return directoryInfo.GetFiles("*.*");
-            case "Attack":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Combat Dialog", "Attack"));
-                return directoryInfo.GetFiles("*.*");
-            case "Hit":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Combat Dialog", "Hit"));
-                return directoryInfo.GetFiles("*.*");
-            case "SteamIDs":
-                directoryInfo = new DirectoryInfo(Path.Combine(folderLoc, "Taunt - SteamIDs"));
-                return directoryInfo.GetFiles("*.*");
+            "General" => Path.Combine("Taunt - General"),
+            "Aggro" => Path.Combine("Taunt - Aggro"),
+            "Enemy" => Path.Combine("Taunt - Enemy"),
+            "PlayerDeath" => Path.Combine("Taunt - Player Death"),
+            "GargoyleDeath" => Path.Combine("Taunt - Gargoyle Death"),
+            "PriorDeath" => Path.Combine("Taunt - Prior Death"),
+            "Coroner" => Path.Combine("Taunt - Prior Death", "Coroner"),
+            "Class" or "EmployeeClass" => Path.Combine("Taunt - EmployeeClass"),
+            "Activity" => Path.Combine("Taunt - Activity"),
+            "Attack" => Path.Combine("Combat Dialog", "Attack"),
+            "Hit" => Path.Combine("Combat Dialog", "Hit"),
+            "SteamIDs" => Path.Combine("Taunt - SteamIDs"),
+            _ => null,
+        };
+
+        if (subPath == null)
+        {
+            LGLog.Warn(LogCat.Audio, $"Unknown voice line category '{type}' requested - no clips will load for it. This is a code bug, not a user error.");
+            return [];
         }
-        return [];
+
+        string full = Path.Combine(folderLoc, subPath);
+        try
+        {
+            var dir = new DirectoryInfo(full);
+            if (!dir.Exists)
+            {
+                // Not an error for the Custom folder - a player simply may not have added any.
+                LGLog.Debug(LogCat.Audio, $"Voice line folder missing, skipping: {full}");
+                return [];
+            }
+            return dir.GetFiles("*.ogg");
+        }
+        catch (Exception ex)
+        {
+            LGLog.Warn(LogCat.Audio, $"Could not read voice line folder '{full}': {ex.GetType().Name}: {ex.Message}. That category will be empty rather than silencing the whole mod.");
+            return [];
+        }
     }
 
     [ClientRpc]
