@@ -52,7 +52,16 @@ namespace LethalGargoyles.src.Scrap
                 // from a client - NGO throws "only the server can invoke a ClientRpc" and the
                 // taunt is lost. The dog-detection decision is a gameplay decision and belongs on
                 // the server anyway.
-                if (IsServer && dogHear && Time.time - lastDogTaunt > dogCooldown && Time.time - lastDogCheck > 1f && !scrapAudio.isPlaying)
+                //
+                // !isPocketed is the fix for "all my statues talk at once". Update() runs on EVERY
+                // item in a player's inventory, not just the one in the active slot, so carrying
+                // four statues meant four independent dog checks - all at the same position, so
+                // all passing together. This was always true; it was HIDDEN because lastDogTaunt
+                // used to be static, so whichever statue fired first blocked the rest for
+                // dogCooldown (300s by default). Making it per-instance was correct and exposed
+                // the real bug underneath. A statue on the floor should still talk; one buried in
+                // your pockets should not.
+                if (IsServer && !isPocketed && dogHear && Time.time - lastDogTaunt > dogCooldown && Time.time - lastDogCheck > 1f && !scrapAudio.isPlaying)
                 {
                     lastDogCheck = Time.time;
                     if (DogNearStatue())
@@ -97,7 +106,9 @@ namespace LethalGargoyles.src.Scrap
             // the server to act. Gating the SEND on IsServer meant only the host ever sent it, so
             // any other player clicking the statue got nothing at all, with no log line.
             // (The "guard every RPC send with IsServer" rule is for ClientRpcs, not ServerRpcs.)
-            if (scrapAudio != null && !scrapAudio.isPlaying)
+            // Belt and braces on isPocketed: vanilla should only route activation to the active
+            // slot, but the Update() path proved that assumption wrong for this item once already.
+            if (!isPocketed && scrapAudio != null && !scrapAudio.isPlaying)
             {
                 // Call the server RPC to handle the interaction
                 ItemActivateServerRpc(used, buttonDown);
@@ -107,6 +118,10 @@ namespace LethalGargoyles.src.Scrap
         [ServerRpc(RequireOwnership = false)]
         private void ItemActivateServerRpc(bool used, bool buttonDown)
         {
+            // Re-check server-side. The send guard above runs on the activating client, and a
+            // ServerRpc with RequireOwnership = false can be sent by anyone - so the authoritative
+            // copy must not take a client's word for it.
+            if (isPocketed) return;
             GeneralTaunt();
         }
 
