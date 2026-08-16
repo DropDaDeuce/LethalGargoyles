@@ -106,8 +106,17 @@ namespace LethalGargoyles.src.Scrap
             // the server to act. Gating the SEND on IsServer meant only the host ever sent it, so
             // any other player clicking the statue got nothing at all, with no log line.
             // (The "guard every RPC send with IsServer" rule is for ClientRpcs, not ServerRpcs.)
-            // Belt and braces on isPocketed: vanilla should only route activation to the active
-            // slot, but the Update() path proved that assumption wrong for this item once already.
+            // DIAGNOSTIC: holding 2 statues and pressing use produces exactly 2 taunts, so the
+            // duplication scales with item count. isPocketed did NOT stop it, so either it is
+            // false for inventory items that are not in the active slot, or ItemActivate is not
+            // where the duplication happens at all. Log every candidate site with the object id
+            // and stop guessing.
+            LGLog.Debug(LogCat.Scrap,
+                $"Statue#{NetworkObjectId} ItemActivate(used={used}, down={buttonDown}) " +
+                $"pocketed={isPocketed} held={isHeld} beingUsed={isBeingUsed} " +
+                $"heldBy={(playerHeldBy != null ? playerHeldBy.playerUsername : "null")} " +
+                $"server={IsServer} owner={IsOwner} audio={(scrapAudio != null ? scrapAudio.GetInstanceID().ToString() : "null")}");
+
             if (!isPocketed && scrapAudio != null && !scrapAudio.isPlaying)
             {
                 // Call the server RPC to handle the interaction
@@ -118,6 +127,8 @@ namespace LethalGargoyles.src.Scrap
         [ServerRpc(RequireOwnership = false)]
         private void ItemActivateServerRpc(bool used, bool buttonDown)
         {
+            LGLog.Debug(LogCat.Scrap, $"Statue#{NetworkObjectId} ItemActivateServerRpc RECEIVED pocketed={isPocketed}");
+
             // Re-check server-side. The send guard above runs on the activating client, and a
             // ServerRpc with RequireOwnership = false can be sent by anyone - so the authoritative
             // copy must not take a client's word for it.
@@ -204,7 +215,7 @@ namespace LethalGargoyles.src.Scrap
 
             if (clipList.Count > 0 && clip != null && scrapAudio != null)
             {
-                LGLog.Debug(LogCat.Scrap, $"Statue {clipType} taunt: {clip.name}");
+                LGLog.Debug(LogCat.Scrap, $"Statue#{NetworkObjectId} PLAYING {clipType}: {clip.name} (audio={scrapAudio.GetInstanceID()})");
                 scrapAudio.PlayOneShot(clip);
                 if (dogHear) StartCoroutine(PlayNoiseWhileTalking());
             }
