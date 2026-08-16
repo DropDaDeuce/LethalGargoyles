@@ -106,20 +106,26 @@ namespace LethalGargoyles.src.Scrap
             // the server to act. Gating the SEND on IsServer meant only the host ever sent it, so
             // any other player clicking the statue got nothing at all, with no log line.
             // (The "guard every RPC send with IsServer" rule is for ClientRpcs, not ServerRpcs.)
-            // DIAGNOSTIC: holding 2 statues and pressing use produces exactly 2 taunts, so the
-            // duplication scales with item count. isPocketed did NOT stop it, so either it is
-            // false for inventory items that are not in the active slot, or ItemActivate is not
-            // where the duplication happens at all. Log every candidate site with the object id
-            // and stop guessing.
-            LGLog.Debug(LogCat.Scrap,
-                $"Statue#{NetworkObjectId} ItemActivate(used={used}, down={buttonDown}) " +
-                $"pocketed={isPocketed} held={isHeld} beingUsed={isBeingUsed} " +
-                $"heldBy={(playerHeldBy != null ? playerHeldBy.playerUsername : "null")} " +
-                $"server={IsServer} owner={IsOwner} audio={(scrapAudio != null ? scrapAudio.GetInstanceID().ToString() : "null")}");
+            if (LGLog.On(LogCat.Scrap, LGLevel.Debug))
+                LGLog.Debug(LogCat.Scrap,
+                    $"Statue#{NetworkObjectId} ItemActivate(used={used}, down={buttonDown}) " +
+                    $"pocketed={isPocketed} held={isHeld} " +
+                    $"heldBy={(playerHeldBy != null ? playerHeldBy.playerUsername : "null")} " +
+                    $"server={IsServer} owner={IsOwner}");
 
-            if (!isPocketed && scrapAudio != null && !scrapAudio.isPlaying)
+            // IsServer IS REQUIRED HERE. Do not remove it again.
+            //
+            // Vanilla REPLICATES ItemActivate to every machine - the host runs it for an item held
+            // by a client (proven in a log: server=True owner=False heldBy=Player #1). So without
+            // this guard EVERY machine forwards the ServerRpc and the server plays one taunt per
+            // machine: two players, two voices; four players, four.
+            //
+            // b8 removed this guard on an audit finding that claimed the statue was mute for
+            // non-hosts. That finding was WRONG - it assumed ItemActivate only runs on the
+            // activating client. The host's replicated copy is what fires the taunt, and it always
+            // did, which is why nobody ever reported the statue being silent.
+            if (IsServer && !isPocketed && scrapAudio != null)
             {
-                // Call the server RPC to handle the interaction
                 ItemActivateServerRpc(used, buttonDown);
             }
         }
@@ -129,11 +135,51 @@ namespace LethalGargoyles.src.Scrap
         {
             LGLog.Debug(LogCat.Scrap, $"Statue#{NetworkObjectId} ItemActivateServerRpc RECEIVED pocketed={isPocketed}");
 
-            // Re-check server-side. The send guard above runs on the activating client, and a
-            // ServerRpc with RequireOwnership = false can be sent by anyone - so the authoritative
-            // copy must not take a client's word for it.
+            // Re-check server-side: RequireOwnership = false means anyone can send this, so the
+            // authoritative copy must not take a caller's word for the item's state.
             if (isPocketed) return;
             GeneralTaunt();
+        }
+
+        /// <summary>
+        /// Server-side: when each player's currently-talking statue will be finished.
+        ///
+        /// Keyed by client id, so carrying four statues cannot stack four voices - the item that
+        /// starts talking holds the floor for that player until its clip ends. Bounded by player
+        /// count, so it cannot grow. Statues lying on the floor are keyed separately by object id
+        /// (see <see cref="_nextTalkTime"/>) because they are not attached to anyone.
+        /// </summary>
+        private static readonly Dictionary<ulong, float> s_playerTalkingUntil = [];
+
+        /// <summary>Per-statue floor, so a single statue cannot be spam-clicked into overlapping itself.</summary>
+        private float _nextTalkTime = 0f;
+
+        /// <summary>
+        /// True when this statue is allowed to start talking, and reserves the slot if so.
+        /// Server-only - GeneralTaunt is only ever reached through the ServerRpc.
+        ///
+        /// This replaces the old <c>!scrapAudio.isPlaying</c> check, which could not do the job:
+        /// clips are played with PlayOneShot, and one-shots do not reliably drive isPlaying, so
+        /// that guard let taunts overlap.
+        /// </summary>
+        private bool TryReserveTalkSlot(float clipLength)
+        {
+            float now = Time.time;
+            if (now < _nextTalkTime) return false;
+
+            if (playerHeldBy != null)
+            {
+                ulong who = playerHeldBy.actualClientId;
+                if (s_playerTalkingUntil.TryGetValue(who, out float busyUntil) && now < busyUntil)
+                {
+                    LGLog.Debug(LogCat.Scrap, $"Statue#{NetworkObjectId} suppressed - {playerHeldBy.playerUsername} already has a statue talking for another {busyUntil - now:0.0}s");
+                    return false;
+                }
+                s_playerTalkingUntil[who] = now + clipLength;
+            }
+
+            _nextTalkTime = now + clipLength;
+            return true;
         }
 
         public void GeneralTaunt()
@@ -165,8 +211,14 @@ namespace LethalGargoyles.src.Scrap
                     // Wrap, don't increment - see the same fix in LethalGargoylesAI.OtherTaunt.
                     randomIndex = (randomIndex + 1) % clipList.Count;
                 }
-                lastTaunt = randomIndex;
                 AudioClip chosen = clipList[randomIndex];
+
+                // One talking statue per player. Reserve before committing to the clip, so a
+                // player holding four of these gets one voice, not four.
+                if (!TryReserveTalkSlot(chosen.length))
+                    return;
+
+                lastTaunt = randomIndex;
                 // Send the type the receiving client will actually resolve it under. The SteamID
                 // clip lives in playerClips, not tauntClips, so announcing it as "general" meant
                 // every client failed to find it and played nothing.
