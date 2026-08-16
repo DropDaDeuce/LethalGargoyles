@@ -106,6 +106,19 @@
   </Target>
 
   <!--
+    The Nexus Mods archive, built from the same bin\Release output as the Thunderstore package.
+    Different shape, though: Nexus has no r2modman-style convention, so the zip mirrors the GAME
+    FOLDER (root `BepInEx\plugins\LethalGargoyles\`) and carries a `fomod\` installer for Vortex
+    and MO2. The script owns the whole layout - see Plugin\Nexus\README.md before changing it.
+
+    Runs only on Release, same as PackThunderstore, and refuses to package a DLL the netcode
+    patcher never touched.
+  -->
+  <Target Name="PackNexus" DependsOnTargets="NetcodePatch" AfterTargets="PostBuildEvent" Condition="$(Configuration) == 'Release'">
+    <Exec Command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(ProjectDir)Nexus\pack-nexus.ps1&quot; -Version $(Version) -Configuration $(Configuration)" />
+  </Target>
+
+  <!--
     NVorbis ships beside the plugin (Thunderstore puts it in lib/NVorbis/), so both files have to
     land in $(TargetDir). $(NuGetPackageRoot) is the machine's own package cache and already ends
     with a separator - it replaces a hardcoded C:\Users\<name>\.nuget\... path that only ever

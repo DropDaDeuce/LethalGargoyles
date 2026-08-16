@@ -1,0 +1,61 @@
+LETHAL GARGOYLES - MANUAL INSTALL
+=================================
+
+If you used Vortex or Mod Organizer 2, you can close this file. The installer already did
+everything below.
+
+
+WHAT YOU NEED FIRST
+-------------------
+
+Lethal Gargoyles will not load on its own. Install these first, from Nexus or from
+Thunderstore, whichever you already use:
+
+  * BepInEx 5 (5.4.2100)
+  * LethalLib     by Evaisa
+  * PathfindingLib by Zaggy1024
+
+If BepInEx is installed correctly you will have a "BepInEx" folder and a "winhttp.dll" file
+sitting next to "Lethal Company.exe".
+
+
+INSTALLING BY HAND
+------------------
+
+1. Open your Lethal Company folder. That is the one with "Lethal Company.exe" in it, usually
+
+      C:\Program Files (x86)\Steam\steamapps\common\Lethal Company
+
+2. Drag the "BepInEx" folder from this zip into that folder and let Windows merge it. That
+   puts the mod at BepInEx\plugins\LethalGargoyles\.
+
+3. Only if you also run the Coroner mod: open the "Optional\Coroner" folder in this zip and
+   drag ITS "BepInEx" folder into the game folder the same way. That adds the Gargoyle's own
+   cause-of-death messages to Coroner's end of round report. Skip it otherwise, it does
+   nothing on its own.
+
+4. Start the game once, then quit. The mod writes its settings to
+   BepInEx\config\DropDaDeuce.LethalGargoyles.cfg and creates a folder for your own voice
+   lines at "Lethal Gargoyles\Custom Voice Lines" in the game directory.
+
+
+ADDING YOUR OWN VOICE LINES
+---------------------------
+
+Drop OGG files into the matching category folder under
+
+    <game folder>\Lethal Gargoyles\Custom Voice Lines\
+
+Not into "Voice Lines" - that one belongs to the mod and gets overwritten on update. Files
+must be OGG and must be under 500 KB each. Full instructions are on the mod's Nexus page.
+
+
+UNINSTALLING
+------------
+
+Delete BepInEx\plugins\LethalGargoyles\. If you want it fully gone, also delete
+BepInEx\config\DropDaDeuce.LethalGargoyles.cfg and the "Lethal Gargoyles" folder in the game
+directory.
+
+
+Bugs, feedback and voice line suggestions: https://github.com/DropDaDeuce/LethalGargoyles

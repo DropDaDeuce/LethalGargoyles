@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FOMOD installer script for Vortex / Mod Organizer 2.
+
+  Every `source` path below is relative to the ROOT OF THE BUILT ZIP, not to this file, and
+  every `destination` is relative to the Lethal Company game folder (the one holding
+  Lethal Company.exe). pack-nexus.ps1 is what produces that layout - if you move a folder
+  there, the matching source path here has to move with it or the installer silently drops
+  the files.
+
+  The archive is deliberately usable BOTH ways: managers read this script, and a player who
+  never installs a mod manager just drags the root `BepInEx` folder into the game folder.
+  That is why the plugin tree sits at the root instead of under a `Core\` folder.
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://qconsulting.ca/gcd/modconfig5.0.xsd">
+
+  <moduleName>Lethal Gargoyles</moduleName>
+
+  <moduleImage path="fomod\icon.png" showImage="true" showFade="true" height="-1" />
+
+  <requiredInstallFiles>
+    <!-- The mod itself: plugin DLL, asset bundle, NVorbis, and the whole Voice Lines tree. -->
+    <folder source="BepInEx" destination="BepInEx" priority="0" />
+  </requiredInstallFiles>
+
+  <installSteps order="Explicit">
+    <installStep name="Optional Extras">
+      <optionalFileGroups order="Explicit">
+        <group name="Other Mod Compatibility" type="SelectAny">
+          <plugins order="Explicit">
+
+            <plugin name="Coroner death messages">
+              <description>Adds the Gargoyle's custom cause-of-death lines to Coroner, so the end of round report says how he got you instead of showing a generic death.
+
+Only does anything if you also run Coroner. It is a small text file and it is harmless to install either way, so leave it ticked unless you want an untouched Coroner config.</description>
+              <files>
+                <folder source="Optional\Coroner\BepInEx" destination="BepInEx" priority="1" />
+              </files>
+              <typeDescriptor>
+                <type name="Recommended" />
+              </typeDescriptor>
+            </plugin>
+
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+  </installSteps>
+
+</config>

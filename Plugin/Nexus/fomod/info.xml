@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FOMOD metadata for the Nexus Mods package.
+
+  The version below is a placeholder token, not a real number. pack-nexus.ps1 substitutes the
+  csproj <Version> into it when it stages the archive, so this file is NOT a fourth version
+  number to keep in sync by hand. Do not replace the token with a literal.
+
+  (This comment deliberately avoids spelling the token out - the substitution is a plain text
+  replace and would rewrite the explanation along with the value.)
+-->
+<fomod>
+  <Name>Lethal Gargoyles</Name>
+  <Author>DropDaDeuce</Author>
+  <Version MachineVersion="@VERSION@">@VERSION@</Version>
+  <Website>https://github.com/DropDaDeuce/LethalGargoyles</Website>
+  <Description>A voiced gargoyle that stalks the facility and taunts you, with 160+ hand recorded voice lines. Requires BepInEx, LethalLib and PathfindingLib.</Description>
+  <Groups>
+    <element>Audio</element>
+    <element>Gameplay</element>
+    <element>Models and Textures</element>
+  </Groups>
+</fomod>

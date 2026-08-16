@@ -50,6 +50,11 @@ UpgradeLog.htm
 # Thunderstore Packages
 /Thunderstore/Packages/*
 
+# Nexus Mods packages and staging. obj/ above already covers /Nexus/obj/, but the built zips
+# need their own rule - same reason as Thunderstore's.
+/Nexus/Packages/*
+
 # Exclude stuff
 !/dlls/LethalLib.dll
 !/Thunderstore/Packages/*.txt
+!/Nexus/Packages/*.txt
