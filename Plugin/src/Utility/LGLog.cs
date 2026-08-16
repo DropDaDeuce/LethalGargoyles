@@ -94,7 +94,22 @@ namespace LethalGargoyles.src.Utility
         internal static bool On(LogCat cat, LGLevel level)
         {
             if (!_enabled) return false;
+
+            // DEFAULT LEVEL IS A FLOOR, NOT A FALLBACK. It used to be the `else` of a TryGetValue,
+            // which read sensibly and was dead code: InitializeDiagnostics binds EVERY category, so
+            // the lookup never missed and _defaultLevel was unreachable. Setting `Default Level` did
+            // precisely nothing, in every config that has ever existed.
+            //
+            // That is not a cosmetic bug. It cost a whole diagnostic round: Mathew set
+            // `Default Level = Debug` to answer a question about the hide search, got a log with no
+            // Movement lines in it at all, and nothing anywhere said why. It is exactly the trap a
+            // player following a "turn this up and send me the log" instruction falls into.
+            //
+            // Taking the more verbose of the two also survives existing config files, which already
+            // have `Warn` written into every category line and would keep ignoring a fallback.
             LGLevel configured = Levels.TryGetValue(cat, out var l) ? l : _defaultLevel;
+            if (_defaultLevel > configured) configured = _defaultLevel;
+
             return configured != LGLevel.Off && level <= configured;
         }
 

@@ -191,6 +191,9 @@ namespace LethalGargoyles.src.Enemy
         private const float TELEPORT_RANGE_MAX = 18f;
         private const int TELEPORT_ATTEMPTS = 10;
 
+        // Push constants
+        private const int PUSH_DAMAGE = 2;
+
         // Throttle constants
         private const float SlowMs = 2.0f; // tune threshold
         private const float AGGRO_EVAL_INTERVAL = 0.20f; // 5Hz; tune 0.15–0.35
@@ -288,6 +291,48 @@ namespace LethalGargoyles.src.Enemy
         private float _nextPathRequestTime;
         private float pathDelayTimer = 0f;
 
+        // Resolved once in Start from config. See GetAllowedLinks for why InternalTeleports alone
+        // is effectively "no links at all" in the base game.
+        private SmartPathfindingLinkFlags _allowedLinks = SmartPathfindingLinkFlags.InternalTeleports;
+
+        // Reused across every CheckZonePath probe. NavMeshPath wraps native memory, and this used
+        // to be allocated inside the zone loop - up to 8 per probe, 16 per evaluation. b8's G6 added
+        // _scratchPath and converted the other call site but missed this one. Kept as its own field
+        // rather than sharing _scratchPath: nothing forces those two call stacks to stay disjoint,
+        // and a second NavMeshPath costs one allocation for the lifetime of the Gargoyle.
+        private NavMeshPath? _zoneScratchPath;
+
+        // "Cornered" tracking. _seenSinceTime is when the CURRENT unbroken stretch of being watched
+        // began (0 = not currently seen); _corneredAggroUntil is how long the resulting charge is
+        // committed for, which has to exist or HandleOutOfAggroRange yanks him straight back into
+        // GetOutOfSight on the very next tick while the player is still looking at him.
+        private float _corneredSince;
+        private Vector3 _corneredAnchorPos;
+        private float _corneredAggroUntil;
+        private float corneredAggroDelay;
+        private const float CORNERED_AGGRO_COMMIT = 8f;
+
+        // How far he has to actually GET, while being watched, to count as escaping rather than
+        // being trapped. At GetOutOfSight speed (baseSpeed * 1.5, so ~6 m/s by default) a genuine
+        // run for cover clears this in well under two seconds, while pacing, jamming on a corner or
+        // shuffling between two equally exposed spots never clears it at all.
+        private const float CORNERED_PROGRESS_DIST = 8f;
+
+        // Did the LAST hide evaluation that actually ran find somewhere genuinely hidden?
+        // This is the half b18 was missing. Being watched is not the same as being trapped, and
+        // escalating on line of sight alone turned him aggressive while he still had perfectly
+        // good cover to walk to. Starts true so he never counts as cornered before he has tried.
+        private bool _hideFoundCover = true;
+
+        // Set by ChooseClosestNodeToPos: true when nothing passed the filters and it had to return
+        // a merely-best-ranked node instead of a hidden one.
+        private bool _nodeChoiceFellBack;
+
+        // Self-throttle for the hide/destination trace below. Deliberately NOT relying on LGLog's
+        // diagRepeatLimit: these messages interpolate a live distance, so every one is a different
+        // string and the repeat limiter would never collapse them.
+        private float _nextHideTraceTime;
+
         // Cache current door's AnimatedObjectTrigger (if available)
         private AnimatedObjectTrigger? currentDoorTrigger;
 
@@ -345,11 +390,31 @@ namespace LethalGargoyles.src.Enemy
         private float aggroRangeSqr = 0f;
         private int minTaunt = 0;
         private int maxTaunt = 0;
+        private float steamIDTauntCooldown = 90f;
         private float distWarnSqr = 0f;
         private float bufferDistSqr = 0f;
         private float awareDistSqr = 0f;
         private float idleDistanceSqr = 0f;
         private bool enablePush = false;
+
+        // HYSTERESIS. Both of these used to be a single hard line, and a single line is a machine
+        // for making an AI twitch: the moment the Gargoyle sits ON the threshold, one step of the
+        // player's toggles the state, every tick, forever.
+        //
+        // Measured in Mathew's 2026-08-16 log, not theorised. `Idle Distance` (20m): THIRTEEN
+        // consecutive AI dumps at the identical position with velocity 0 while the player wandered
+        // between 10.5m and 19.8m, and ten more hovering at 18.5-19.8m inching a metre at a time -
+        // which is the "walks back and forth a few feet" report, exactly. `Awareness` (40m): four
+        // acquire-then-lose cycles back to back, every acquisition followed immediately by a hide
+        // evaluation at 39.6-40.0m.
+        //
+        // Enter on the configured distance, LEAVE on the wider one. The player's setting still
+        // means what it says (that is the distance at which the behaviour starts); the widened
+        // value only decides when it stops, so nothing needs a new config entry.
+        private const float IDLE_HYSTERESIS = 1.2f;
+        private const float AWARE_HYSTERESIS = 1.15f;
+        private float idleKeepDistSqr = 0f;
+        private float awareKeepDistSqr = 0f;
 
         // Taunts/audio bookkeeping
         private float randGenTauntTime = 0f;
@@ -380,6 +445,10 @@ namespace LethalGargoyles.src.Enemy
 
         private AnimState _lastAnim = AnimState.Idle;
 
+        // Last footstep volume ApplyStateAudio pushed into creatureSFX. Starts off any real value
+        // so the first Update applies it on every machine, clients included.
+        private float _lastSfxVolume = -1f;
+
         // Teleport optimization runtime
         private float _nextTeleportTime;
 
@@ -403,7 +472,19 @@ namespace LethalGargoyles.src.Enemy
             SetAnim(AnimState.Walk);
 
             SwitchState(State.SearchingForPlayer);
-            StartSearch(transform.position);
+
+            // Deliberately NOT StartSearch(transform.position) any more. That is VANILLA roaming,
+            // and it was always immediately superseded by SearchForPlayers()'s StartSmartSearch on
+            // the first Update - harmlessly, back when that ran unguarded every frame.
+            //
+            // It stops being harmless the moment SearchForPlayers is guarded on
+            // currentSearch.inProgress (P1): vanilla StartSearch sets inProgress = true right here,
+            // so the guard would see a search already running and the SMART search would never
+            // start at all. The Gargoyle would silently fall back to vanilla roaming for the whole
+            // round - no error, no log line, just worse pathing than v0.7.0 shipped with.
+            //
+            // HandleSearchingForPlayerState starts the smart search on the first tick instead.
+            // currentSearch is a serialized field, so it is non-null with inProgress false here.
 
             baseSpeed = Plugin.BoundConfig.baseSpeed.Value;
 
@@ -411,6 +492,7 @@ namespace LethalGargoyles.src.Enemy
 
             minTaunt = Plugin.BoundConfig.minTaunt.Value;
             maxTaunt = Plugin.BoundConfig.maxTaunt.Value;
+            steamIDTauntCooldown = Plugin.BoundConfig.steamIDTauntCooldown.Value;
 
             attackRangeSqr = Plugin.BoundConfig.attackRange.Value;
             attackRangeSqr *= attackRangeSqr;
@@ -429,8 +511,29 @@ namespace LethalGargoyles.src.Enemy
 
             awareDistSqr = Plugin.BoundConfig.awareDist.Value;
             awareDistSqr *= awareDistSqr;
+            awareKeepDistSqr = awareDistSqr * (AWARE_HYSTERESIS * AWARE_HYSTERESIS);
+
+            idleKeepDistSqr = idleDistanceSqr * (IDLE_HYSTERESIS * IDLE_HYSTERESIS);
 
             enablePush = Plugin.BoundConfig.enablePush.Value;
+            corneredAggroDelay = Plugin.BoundConfig.corneredAggroDelay.Value;
+
+            // InternalTeleports is always allowed (other mods' portals register into it and it is
+            // empty in vanilla). The two that change real behaviour are opt-in and default off.
+            // Runtime-writable, unlike the prefab field it was baked from - so this can be tuned
+            // without a bundle rebuild. Only touched when it differs, so the default is a no-op.
+            float cfgRadius = Plugin.BoundConfig.agentRadius.Value;
+            if (cfgRadius > 0f && !Mathf.Approximately(agent.radius, cfgRadius))
+            {
+                LGLog.Info(LogCat.Movement, $"{GargoyleTag} agent radius {agent.radius:0.00} -> {cfgRadius:0.00} (config)");
+                agent.radius = cfgRadius;
+            }
+
+            _allowedLinks = SmartPathfindingLinkFlags.InternalTeleports;
+            if (Plugin.BoundConfig.allowExitFacility.Value)
+                _allowedLinks |= SmartPathfindingLinkFlags.MainEntrance | SmartPathfindingLinkFlags.FireExits;
+            if (Plugin.BoundConfig.allowElevators.Value)
+                _allowedLinks |= SmartPathfindingLinkFlags.Elevators;
             lastAttackTime = Time.time;
             pushTimer = Time.time;
 
@@ -442,7 +545,9 @@ namespace LethalGargoyles.src.Enemy
             creatureVoice.maxDistance *= 3;
             pathDelayTimer = Time.time;
 
-            lastSteamIDTauntTime = Time.time - 91f;
+            // Backdate past the cooldown so the first personal line is not gated at spawn. Must
+            // track the config value, or raising the cooldown would silently re-gate that first one.
+            lastSteamIDTauntTime = Time.time - (steamIDTauntCooldown + 1f);
 
             cachedOutsideAINodes.Clear();
             foreach (var node in RoundManager.Instance.outsideAINodes)
@@ -479,6 +584,10 @@ namespace LethalGargoyles.src.Enemy
             cachedTargetPosition = targetPlayer != null ? targetPlayer.transform.position : transform.position;
 
             if (isEnemyDead || StartOfRound.Instance.allPlayersDead) return;
+
+            // Deliberately ABOVE both returns below. See ApplyStateAudio.
+            ApplyStateAudio();
+
             if (!agent.enabled || !agent.isOnNavMesh) return;
             if (!IsOwner) return;
 
@@ -536,7 +645,39 @@ namespace LethalGargoyles.src.Enemy
                 distanceToClosestPlayerSqr = closestPlayer != null
                     ? (transform.position - closestPlayer.transform.position).sqrMagnitude
                     : float.MaxValue;
-                isSeen = GargoyleIsSeen(transform);
+                // RISING EDGE OF "SPOTTED" MUST INTERRUPT THE CURRENT HIDE COMMITMENT.
+                //
+                // Mathew measured the reaction to being seen varying between instant and ~3s. The
+                // timers stack: up to 0.33s to notice (this block), then up to 2.0s on the
+                // pathDelayTimer commitment gate at the top of SetDestinationToHiddenPosition,
+                // then up to 0.35s on HIDE_EVAL_INTERVAL, then up to 0.75s on REPATH_INTERVAL.
+                // Worst case ~3.4s, best case ~0 - which is exactly the "varies" he described.
+                //
+                // Those gates are all correct for the steady state; they exist so the Gargoyle
+                // commits to a hiding spot instead of dithering. Being spotted is the one event
+                // that has to override the commitment, so expire them here rather than shortening
+                // any of them - shortening them would bring back the dithering they prevent.
+                bool nowSeen = GargoyleIsSeen(transform);
+                if (nowSeen && !isSeen)
+                {
+                    pathDelayTimer = Time.time - 2f;
+                    _nextHideEvalTime = 0f;
+                    _nextPathRequestTime = 0f;
+                    LGLog.Debug(LogCat.Movement, $"{GargoyleTag} spotted - clearing hide commitment for an immediate re-evaluation");
+                    _corneredSince = Time.time;
+                    _corneredAnchorPos = transform.position;
+                }
+                else if (!nowSeen && isSeen)
+                {
+                    // He got away. Both the cornered timer and any live charge commitment end here -
+                    // breaking line of sight is exactly the outcome the escalation exists to reach,
+                    // so reaching it must not leave him aggressive.
+                    _corneredSince = 0f;
+                    _corneredAggroUntil = 0f;
+                }
+                isSeen = nowSeen;
+
+                UpdateCorneredTimer();
 
 #if DEBUG
                 LogIfSlow("Seen/Closest", (float)sw.Elapsed.TotalMilliseconds - t0,
@@ -566,7 +707,28 @@ namespace LethalGargoyles.src.Enemy
 #endif
             }
 
-            if (currentBehaviourStateIndex != (int)State.Idle)
+            // EXACTLY ONE THING STEERS THE AGENT PER STATE.
+            //
+            // In SearchingForPlayer that is PathfindingLib's search coroutine, which drives the
+            // agent through GoToSmartPathDestination. FollowSmartPath must NOT also run there: no
+            // search-state code path ever calls SetSmartDestination, so `pathingTask` is whatever
+            // the PREVIOUS state left behind, and FollowSmartPath would spend the whole search
+            // dragging him back toward a goal that stopped being relevant a state change ago.
+            //
+            // The two then fed each other. Both wrote _lastActiveDestination, so each one's
+            // SetDestination made the other's `destChanged` fire on the next frame, and they
+            // overwrote each other every frame - the agent re-solved a path continuously and
+            // never followed one, which reads in the log as velocity 0 with `dest` cycling
+            // between nodes while `pos` does not move at all. Measured 2026-08-16: 11 dumps
+            // frozen at one position across two separate searches.
+            //
+            // Link activation still has to happen in both cases, which is why it now lives in its
+            // own method rather than at the bottom of FollowSmartPath.
+            if (currentBehaviourStateIndex == (int)State.SearchingForPlayer)
+            {
+                TryActivateSmartLink();
+            }
+            else if (currentBehaviourStateIndex != (int)State.Idle)
             {
 #if DEBUG
                 float t0 = (float)sw.Elapsed.TotalMilliseconds;
@@ -615,7 +777,7 @@ namespace LethalGargoyles.src.Enemy
 
                 string distInfo =
                     $"dist(target)={distToTarget:0.0}m dist(closest)={distToClosest:0.0}m " +
-                    $"ranges: aware={Mathf.Sqrt(awareDistSqr):0.0} aggro={Mathf.Sqrt(aggroRangeSqr):0.0} idle={Mathf.Sqrt(idleDistanceSqr):0.0} atk={Mathf.Sqrt(attackRangeSqr):0.0} buffer={Mathf.Sqrt(bufferDistSqr):0.0}";
+                    $"ranges: aware={Mathf.Sqrt(awareDistSqr):0.0}(keep {Mathf.Sqrt(awareKeepDistSqr):0.0}) aggro={Mathf.Sqrt(aggroRangeSqr):0.0} idle={Mathf.Sqrt(idleDistanceSqr):0.0}(keep {Mathf.Sqrt(idleKeepDistSqr):0.0}) atk={Mathf.Sqrt(attackRangeSqr):0.0} buffer={Mathf.Sqrt(bufferDistSqr):0.0}";
 
                 string perceptionInfo =
                     $"seen={isSeen} targetSees={targetSeesGargoyle} canSee={canSeePlayer} " +
@@ -745,7 +907,7 @@ namespace LethalGargoyles.src.Enemy
                 case (int)State.SearchingForPlayer:
                     if (FoundClosestPlayerInRange())
                     {
-                        StopSearch(currentSearch);
+                        // No StopSearch here any more - SwitchState owns it for every exit.
                         SwitchState(State.StealthyPursuit);
                     }
 
@@ -920,10 +1082,40 @@ namespace LethalGargoyles.src.Enemy
             };
         }
 
+        /// <summary>
+        /// Single choke point for state changes - and the ONLY place the roam search is stopped.
+        ///
+        /// It used to be stopped in exactly one of the three exits from SearchingForPlayer (the
+        /// FoundClosestPlayerInRange arm); HandleOutOfAggroRange's two exits to GetOutOfSight and
+        /// StealthyPursuit both left it running. That was harmless while the search restarted every
+        /// frame and never got anywhere - but the moment the P1 guard let it actually run, a leaked
+        /// search coroutine became a SECOND writer of agent.SetDestination, fighting FollowSmartPath
+        /// every frame through the ISmartAI callback. Two writers alternating at frame rate is a
+        /// walk-a-few-feet-and-come-back oscillation, which is exactly what Mathew reported.
+        ///
+        /// Stopping it here rather than at each call site is deliberate: the old arrangement failed
+        /// because it relied on every future exit remembering, and two of three did not.
+        /// </summary>
         private void SwitchState(State state)
         {
-            if (IsOwner && currentBehaviourStateIndex != (int)state)
-                SwitchToBehaviourState((int)state);
+            if (!IsOwner || currentBehaviourStateIndex == (int)state)
+                return;
+
+            if (currentBehaviourStateIndex == (int)State.SearchingForPlayer &&
+                currentSearch != null && currentSearch.inProgress)
+            {
+                LGLog.Debug(LogCat.Movement, $"{GargoyleTag} leaving SearchingForPlayer -> stopping smart search");
+                StopSearch(currentSearch);
+            }
+
+            // Hand the agent over clean. The search coroutine is about to become the only thing
+            // steering, so anything the outgoing state was still driving toward has to go with it -
+            // otherwise it sits in pathingTask for the whole search as a second opinion nobody
+            // asked for. Paired with the Update gate; either alone leaves half the stall in place.
+            if (state == State.SearchingForPlayer)
+                ClearSmartPath("entering SearchingForPlayer");
+
+            SwitchToBehaviourState((int)state);
         }
 
         private void SetAnim(AnimState anim)
@@ -971,13 +1163,63 @@ namespace LethalGargoyles.src.Enemy
 
             bool sameRegionAsGargoyle = targetPlayer.isInsideFactory != isOutside;
 
+            // awareKeepDistSqr, not awareDistSqr: this is the FORGET test, and forgetting has to be
+            // harder than noticing or he drops and re-acquires the same player on alternate ticks.
             if (!sameRegionAsGargoyle ||
                 !targetPlayer.isPlayerControlled ||
                 targetPlayer.isPlayerDead ||
-                distanceToPlayerSqr > awareDistSqr)
+                distanceToPlayerSqr > awareKeepDistSqr)
             {
                 targetPlayer = null;
                 SwitchState(State.SearchingForPlayer);
+            }
+        }
+
+        /// <summary>
+        /// Sets the footstep volume from the current state, ON EVERY MACHINE.
+        ///
+        /// <para><c>creatureSFX</c> IS the footstep source: <c>LethalGargoylesSFX.PlayStep</c> is
+        /// wired to an animation event in the prefab and PlayOneShots the step clip through this
+        /// AudioSource. Animation events fire wherever the animation plays, which is everywhere -
+        /// but every volume assignment used to live in a state handler, and those run from
+        /// <c>Update</c> below its <c>!IsOwner</c> return. So a client's copy sat at the prefab
+        /// default for the whole round and NOTHING the AI did to the volume ever reached it.
+        /// Confirmed in game 2026-08-16: the push, which is supposed to be near-silent, was
+        /// arriving at full volume for the player being pushed. Same shape as the push-damage bug
+        /// in <c>ApplyPushClientRpc</c>, different symptom.</para>
+        ///
+        /// <para>No RPC needed: vanilla already replicates <c>currentBehaviourStateIndex</c>
+        /// through <c>SwitchToBehaviourClientRpc</c>, so every machine can derive this for itself.
+        /// THIS METHOD IS THE ONLY PLACE THE FOOTSTEP VOLUME IS SET - putting a
+        /// <c>creatureSFX.volume</c> line back into a state handler re-breaks it for clients
+        /// silently, because the host will sound perfectly correct.</para>
+        /// </summary>
+        private void ApplyStateAudio()
+        {
+            if (creatureSFX == null) return;
+
+            float volume = currentBehaviourStateIndex switch
+            {
+                (int)State.Idle => 0f,
+                (int)State.SearchingForPlayer => 1f,
+                (int)State.StealthyPursuit => 0.5f,
+                // 1.7 is out of range - Unity clamps AudioSource.volume to 0-1, so this has always
+                // behaved as 1. Kept at the authored value rather than quietly retuned to 1.
+                (int)State.AggressivePursuit => 1.7f,
+                (int)State.GetOutOfSight => 1f,
+                // Near-silent on purpose. PushTarget is the sneak-up-and-shove state and it used to
+                // run at 1.7, the same as an open chase, which announced the one move that only
+                // works if you do not hear it coming. Not zero: a faint scrape is still fair warning.
+                (int)State.PushTarget => 0.05f,
+                _ => 1f,
+            };
+
+            // Cached rather than read back off the AudioSource, because the 1.7 above would read
+            // back as 1 and make the comparison fire an assignment every frame.
+            if (_lastSfxVolume != volume)
+            {
+                _lastSfxVolume = volume;
+                creatureSFX.volume = volume;
             }
         }
 
@@ -1013,7 +1255,6 @@ namespace LethalGargoyles.src.Enemy
         {
             agent.speed = 0f;
             agent.angularSpeed = 140f;
-            creatureSFX.volume = 0f;
             agent.stoppingDistance = 0.1f;
             if (targetPlayer != null)
             {
@@ -1033,7 +1274,6 @@ namespace LethalGargoyles.src.Enemy
         {
             agent.speed = baseSpeed * 1.5f;
             agent.angularSpeed = 250f;
-            creatureSFX.volume = 1f;
             agent.stoppingDistance = 0.2f;
             SearchForPlayers();
         }
@@ -1042,7 +1282,6 @@ namespace LethalGargoyles.src.Enemy
         {
             agent.speed = baseSpeed;
             agent.angularSpeed = 140f;
-            creatureSFX.volume = 0.5f;
             agent.stoppingDistance = 0.1f;
 
             if (targetPlayer != null)
@@ -1053,7 +1292,7 @@ namespace LethalGargoyles.src.Enemy
                 bool foundSpot = SetDestinationToHiddenPosition();
                 if (!foundSpot)
                 {
-                    SetSmartDestination(cachedTargetPosition);
+                    FallBackWhenNoCover();
                 }
 
                 if (Time.time - lastGenTauntTime >= randGenTauntTime)
@@ -1074,7 +1313,6 @@ namespace LethalGargoyles.src.Enemy
         private void HandleAggressivePursuitState()
         {
             agent.speed = baseSpeed * 1.8f;
-            creatureSFX.volume = 1.7f;
             agent.angularSpeed = 180f;
             agent.stoppingDistance = 0.1f;
             if (closestPlayer != null)
@@ -1106,22 +1344,123 @@ namespace LethalGargoyles.src.Enemy
             }
         }
 
+        /// <summary>
+        /// Advances the "cornered" clock. Cornered means: watched continuously, and GOING NOWHERE.
+        ///
+        /// This is the third definition, and the previous two each failed in an instructive way.
+        /// b18 keyed on line of sight alone, which fired while he was legitimately running for
+        /// cover - being looked at is not being trapped. b20 keyed on the hide search reporting no
+        /// cover, and never fired at all, because on the catwalk Mathew trapped him in there ARE
+        /// hidden nodes down the dark end - the search finds them, he simply cannot get to them.
+        /// "Can I find cover" and "am I getting away" are not the same question, and only the
+        /// second one matches what a player means by cornered.
+        ///
+        /// So: measure actual displacement. Cover 8m and the clock re-anchors, because whatever he
+        /// is doing is working. Fail to cover 8m while a player watches and it does not matter
+        /// WHY - no cover, unreachable cover, jammed on a corner, pacing between two bad spots -
+        /// he is stuck, and stuck is the thing worth reacting to.
+        ///
+        /// Runs from the Update seen-check, NOT from a state handler, deliberately: the previous
+        /// version sat inside HandleGetOutOfSightState's `targetPlayer != null` body, so it could
+        /// not run at all when the player watching him was not the player he had targeted - which,
+        /// now that several Gargoyles spread across the crew, is common.
+        /// </summary>
+        private void UpdateCorneredTimer()
+        {
+            if (!isSeen)
+            {
+                _corneredSince = 0f;
+                return;
+            }
+
+            if (_corneredSince <= 0f)
+            {
+                _corneredSince = Time.time;
+                _corneredAnchorPos = transform.position;
+                return;
+            }
+
+            // Getting somewhere. Slide the window rather than clearing it, so the test is always
+            // "has he covered ground in the LAST few seconds", not "since he was first spotted".
+            if ((transform.position - _corneredAnchorPos).sqrMagnitude >= CORNERED_PROGRESS_DIST * CORNERED_PROGRESS_DIST)
+            {
+                _corneredSince = Time.time;
+                _corneredAnchorPos = transform.position;
+            }
+        }
+
+        /// <summary>
+        /// The hide search found nothing. Decide where to go anyway.
+        ///
+        /// If a player is WATCHING, back off - pick the reachable node furthest from him and head
+        /// there, so the next evaluation samples for cover from a completely different place. That
+        /// is Mathew's design and it is iterative by construction: sample, nothing, retreat, sample
+        /// again from further out. Each retreat also puts real distance on the clock, which is what
+        /// stops the cornered escalation firing while he still has somewhere to go.
+        ///
+        /// **What this replaces was actively backwards.** Both hide callers answered "no cover
+        /// found" with SetSmartDestination(cachedTargetPosition) - they walked STRAIGHT AT the
+        /// person they were hiding from. That is the "he tries to get close to me and then just
+        /// stands there in my sight" Mathew reported, and it was flagged in the b10 audit as a
+        /// consequence of the Bounds bug without ever being fixed on its own account.
+        ///
+        /// When NOT seen, approaching is still right - that is ordinary stalking, and changing it
+        /// would turn him into an enemy that runs away from people who have not noticed him.
+        /// </summary>
+        private void FallBackWhenNoCover()
+        {
+            if (!isSeen)
+            {
+                SetSmartDestination(cachedTargetPosition);
+                return;
+            }
+
+            Vector3 retreat = ChooseClosestNodeToPos(cachedTargetPosition, avoidLineOfSight: false,
+                                                     preferFarFromPos: true);
+
+            // Only worth taking if it actually gains ground; otherwise there is genuinely nowhere
+            // to go, he stops covering distance, and the cornered clock is left to run out - which
+            // is exactly when the aggression is supposed to take over.
+            if (!IsInvalidPos(retreat) &&
+                (retreat - transform.position).sqrMagnitude > 4f &&
+                (retreat - cachedTargetPosition).sqrMagnitude > distanceToPlayerSqr)
+            {
+                if (HideTraceReady())
+                    LGLog.Debug(LogCat.Movement,
+                        $"{GargoyleTag} no cover - backing off {Vector3.Distance(transform.position, retreat):0.0}m to re-sample from further out");
+                SetSmartDestination(retreat);
+                return;
+            }
+
+            if (HideTraceReady())
+                LGLog.Debug(LogCat.Movement, $"{GargoyleTag} no cover and nowhere to back off to - holding, cornered clock running");
+        }
+
+        private bool IsCorneredWhileSeen()
+        {
+            if (corneredAggroDelay <= 0f) return false;   // switched off in config
+            if (!isSeen || _corneredSince <= 0f) return false;
+            if (closestPlayer == null) return false;      // AggressivePursuit has nobody to charge
+            return Time.time - _corneredSince >= corneredAggroDelay;
+        }
+
         private void HandleGetOutOfSightState()
         {
             agent.speed = baseSpeed * 1.5f;
             agent.angularSpeed = 250f;
-            creatureSFX.volume = 1f;
             agent.stoppingDistance = 0.2f;
+
             if (targetPlayer != null)
             {
                 bool foundSpot = SetDestinationToHiddenPosition();
+
                 if (Time.time - lastGenTauntTime >= randGenTauntTime)
                 {
                     Taunt();
                 }
                 if (!foundSpot)
                 {
-                    SetSmartDestination(cachedTargetPosition);
+                    FallBackWhenNoCover();
                 }
             }
         }
@@ -1129,7 +1468,6 @@ namespace LethalGargoyles.src.Enemy
         private void HandlePushTargetState()
         {
             agent.speed = baseSpeed * 2.5f;
-            creatureSFX.volume = 1.7f;
             agent.angularSpeed = 500f;
             agent.stoppingDistance = 0.3f;
             if (targetPlayer != null)
@@ -1217,13 +1555,43 @@ namespace LethalGargoyles.src.Enemy
             }
         }
 
+        /// <summary>
+        /// Distance at which he should be standing still, widened while he already is.
+        /// He settles at <c>Idle Distance</c> and does not get moving again until the player has
+        /// opened up to 1.2x that, so drifting a step across the line no longer flips the state.
+        /// </summary>
+        private float CurrentIdleThresholdSqr() =>
+            currentBehaviourStateIndex == (int)State.Idle ? idleKeepDistSqr : idleDistanceSqr;
+
         private void HandleOutOfAggroRange()
         {
+            // A cornered charge has to survive this method. Without the guard the `isSeen` arm below
+            // fires on the very next tick - the player is still looking at him, after all - and puts
+            // him straight back into GetOutOfSight, so the escalation would last a single frame and
+            // change nothing. The commitment ends early on its own if he breaks line of sight.
+            if (Time.time < _corneredAggroUntil)
+                return;
+
+            // LAST RESORT, and it has to be tested HERE rather than inside HandleGetOutOfSightState.
+            // That handler's whole body is gated on `targetPlayer != null`, so when the player doing
+            // the watching is not the one this Gargoyle has targeted - routine now that several of
+            // them spread across the crew - the escalation could never run. This method has no such
+            // gate, and it is already the exact decision point for "a player can see me".
+            if (IsCorneredWhileSeen())
+            {
+                _corneredAggroUntil = Time.time + CORNERED_AGGRO_COMMIT;
+                _corneredSince = 0f;
+                LGLog.Info(LogCat.StateMachine,
+                    $"{GargoyleTag} cornered - watched {corneredAggroDelay:0.0}s without covering {CORNERED_PROGRESS_DIST:0}m, going aggressive");
+                SwitchState(State.AggressivePursuit);
+                return;
+            }
+
             if (isSeen)
             {
                 SwitchState(State.GetOutOfSight);
             }
-            else if (distanceToPlayerSqr <= idleDistanceSqr && targetPlayer != null)
+            else if (targetPlayer != null && distanceToPlayerSqr <= CurrentIdleThresholdSqr())
             {
                 SwitchState(State.Idle);
             }
@@ -1258,39 +1626,78 @@ namespace LethalGargoyles.src.Enemy
         // 6) Movement / smart path / roaming (+ teleport)
         // ============================================================
 
+        /// <summary>
+        /// Starts the roaming search - ONCE per stint in SearchingForPlayer, not once per tick.
+        ///
+        /// HandleSearchingForPlayerState runs from Update, so this used to be called every single
+        /// frame, and PathfindingLib's StartSmartSearch is not a "keep searching" call - it is a
+        /// "start over" call. Its first two statements are `newSearch = new AISearchRoutine()` and
+        /// `enemy.StopSearch(enemy.currentSearch, clear: true)`, and vanilla StopSearch with
+        /// clear:true stops both search coroutines, runs a RoundManager node refresh and does
+        /// `search.unsearchedNodes = allAINodes.ToList()`. So every frame the mod threw away the
+        /// search that was running, allocated a fresh routine and a fresh copy of every AI node in
+        /// the level, and started two coroutines that were killed ~16ms later.
+        ///
+        /// CurrentSmartSearchCoroutine opens with `yield return null` and then waits on
+        /// WaitUntil(choseTargetNode) - it CANNOT complete inside one frame. So the search never
+        /// picked even its first node and the Gargoyle did not roam at all while searching; it
+        /// stood around waiting for someone to walk into its awareness radius.
+        ///
+        /// b8's stutter hunt never saw this because it profiled HandleStealthyPursuitState, which
+        /// requires a target. This is the state with no target.
+        /// </summary>
         void SearchForPlayers()
         {
-            const SmartPathfindingLinkFlags allowedLinks = SmartPathfindingLinkFlags.InternalTeleports;
-            this.StartSmartSearch(transform.position, allowedLinks);
+            if (currentSearch != null && currentSearch.inProgress)
+                return;
+
+            LGLog.Debug(LogCat.Movement, $"{GargoyleTag} starting smart search (links={GetAllowedLinks()})");
+            this.StartSmartSearch(transform.position, GetAllowedLinks());
         }
 
+        /// <summary>
+        /// ISmartAI callback: PathfindingLib telling us where to go next.
+        ///
+        /// This used to funnel all four arms into SetSmartDestination, which starts a SECOND
+        /// SmartPathTask to a position the pathfinder had already solved - a redundant solve
+        /// racing the search's own task - and, worse, discarded destination.Type, which is the
+        /// one piece of information this callback exists to deliver: whether the waypoint is a
+        /// place to walk to or a link to activate. FollowSmartPath does the activation, and it
+        /// reads activeDestination, so the type has to survive.
+        /// </summary>
         public void GoToSmartPathDestination(in SmartPathDestination destination)
         {
-            switch (destination.Type)
-            {
-                case SmartDestinationType.DirectToDestination:
-                    SetSmartDestination(destination.Position);
-                    break;
-                case SmartDestinationType.InternalTeleport:
-                    SetSmartDestination(destination.Position);
-                    break;
-                case SmartDestinationType.EntranceTeleport:
-                    SetSmartDestination(destination.Position);
-                    break;
-                case SmartDestinationType.Elevator:
-                    SetSmartDestination(destination.Position);
-                    break;
-            }
+            activeDestination = destination;
+            agent.SetDestination(destination.Position);
+
+            // DO NOT write _lastActiveDestination here. It belongs to FollowSmartPath alone - it is
+            // that method's record of the destination IT last issued, and its only use is the
+            // `destChanged` test. Writing it from this callback meant the search coroutine's node
+            // landed in FollowSmartPath's change detector, which read it as "my destination moved"
+            // and immediately re-issued its own stale goal on top. That is one half of the stall;
+            // the other half is FollowSmartPath running here at all, gated in Update.
         }
 
+        /// <summary>
+        /// Requests a smart path to <paramref name="destination"/>, subject to the repath throttle.
+        ///
+        /// THE BOOKKEEPING MUST NOT RUN UNLESS THE REQUEST ACTUALLY STARTED. SmartPathTask's
+        /// StartPathTask opens with `if (jobData == null || IsComplete)` and silently does NOTHING
+        /// when a job is still in flight - no exception, no restart, no signal. This method used to
+        /// set _lastRequestedDest and arm the REPATH_INTERVAL cooldown BEFORE calling it, so
+        /// whenever a job outlived the cooldown the mod believed it had requested a path to the new
+        /// position while the task was still solving the old one, and FollowSmartPath kept driving
+        /// to the stale result for at least another interval.
+        /// </summary>
         private void SetSmartDestination(Vector3 destination)
         {
             if (pathingTask != null && pathingTask.IsStarted)
             {
                 FollowSmartPath();
 
-                if (!pathingTask.IsResultReady(0) &&
-                    (destination - _lastRequestedDest).sqrMagnitude <= DEST_CHANGE_SQR)
+                // A job is still running. StartPathTask would be a no-op, so returning here is not
+                // a throttle - it is the truth about what the library will do.
+                if (!pathingTask.IsComplete)
                     return;
             }
 
@@ -1316,18 +1723,42 @@ namespace LethalGargoyles.src.Enemy
             var dest = activeDestination.Value;
             Vector3 destPos = dest.Position;
 
-            bool agentNeedsPath =
-                !agent.hasPath ||
-                agent.pathPending ||
-                agent.pathStatus == NavMeshPathStatus.PathInvalid;
-
+            // agent.pathPending means "a path to this destination is ALREADY being computed".
+            // Treating it as "needs a path" made this re-issue SetDestination every frame for as
+            // long as the solve took, and each SetDestination re-queues the request - so under
+            // load the agent could sit in the no-path state indefinitely, which also drops the
+            // animation to Idle and trips ShouldEvaluateHide's escape hatch on repeat.
             bool destChanged = (_lastActiveDestination - destPos).sqrMagnitude > DEST_EPSILON_SQR;
 
-            if (destChanged || agentNeedsPath)
+            if (agent.pathPending)
+            {
+                // Already working on it. Leave it alone.
+            }
+            else if (destChanged || !agent.hasPath || agent.pathStatus == NavMeshPathStatus.PathInvalid)
             {
                 agent.SetDestination(destPos);
                 _lastActiveDestination = destPos;
             }
+
+            TryActivateSmartLink();
+        }
+
+        /// <summary>
+        /// Activates the link at <see cref="activeDestination"/> once we are standing on it.
+        ///
+        /// SPLIT OUT OF FollowSmartPath ON PURPOSE. Those were two different jobs sharing a method:
+        /// following <c>pathingTask</c> (which only the pursuit and hide states ever populate) and
+        /// activating a link (which matters in EVERY state that moves, the search included, because
+        /// PathfindingLib hands link waypoints to <see cref="GoToSmartPathDestination"/> as well).
+        /// Gating the whole method off during the search - which is what stops the two-writer stall
+        /// below - would otherwise have taken link traversal down with it.
+        /// </summary>
+        private void TryActivateSmartLink()
+        {
+            if (activeDestination == null) return;
+
+            var dest = activeDestination.Value;
+            Vector3 destPos = dest.Position;
 
             float activateDist = 1f + agent.stoppingDistance;
             if ((transform.position - destPos).sqrMagnitude <= activateDist * activateDist)
@@ -1336,6 +1767,7 @@ namespace LethalGargoyles.src.Enemy
                 {
                     case SmartDestinationType.InternalTeleport:
                         agent.Warp(dest.InternalTeleport.Destination.position);
+                        InvalidatePathAfterLink("InternalTeleport");
                         break;
 
                     case SmartDestinationType.EntranceTeleport:
@@ -1345,10 +1777,24 @@ namespace LethalGargoyles.src.Enemy
                         // one, which is also the null guard the old exitPoint read never had.
                         EntranceTeleport entrance = dest.EntranceTeleport;
                         if (entrance.FindExitPoint() && entrance.exitScript != null)
+                        {
                             agent.Warp(entrance.exitScript.entrancePoint.position);
+
+                            // SetEnemyOutside, NOT `isOutside = !isOutside`. The vanilla setter
+                            // also calls GetAINodes(), which repopulates allAINodes for the region
+                            // it just entered. isOutside gates node selection, cover search and
+                            // every same-region player check in this file, so getting it wrong
+                            // leaves the Gargoyle hunting for players it can never reach.
+                            SetEnemyOutside(!isOutside);
+                            InvalidatePathAfterLink("EntranceTeleport");
+                        }
                         break;
 
                     case SmartDestinationType.Elevator:
+                        // NOT invalidated here, deliberately. CanActivateDestination returns
+                        // IsInsideElevator() for a RIDE destination, so the Gargoyle has to stay
+                        // put in the car until the ride finishes; re-pathing mid-ride would walk
+                        // it back out. Calling the elevator is idempotent.
                         if (dest.CanActivateDestination(transform.position))
                             dest.ElevatorFloor.CallElevator();
                         break;
@@ -1356,10 +1802,61 @@ namespace LethalGargoyles.src.Enemy
             }
         }
 
-        private SmartPathfindingLinkFlags GetAllowedLinks()
+        /// <summary>
+        /// Throws away every piece of pathing state after the Gargoyle traverses a link.
+        ///
+        /// Without this it loops the link forever: the warp leaves _lastActiveDestination and
+        /// pathingTask still pointing at the link's near side, and agent.hasPath is false straight
+        /// after a Warp - so the very next FollowSmartPath calls SetDestination on the teleport it
+        /// just came out of and walks back in. GetResult returns intermediate link waypoints before
+        /// the final goal, so a multi-hop path is the NORMAL shape here, not an edge case. This
+        /// never fired before only because InternalTeleports is the one link flag with nothing
+        /// behind it in vanilla.
+        /// </summary>
+        private void InvalidatePathAfterLink(string linkKind) =>
+            ClearSmartPath($"traversed {linkKind}; re-pathing from the far side");
+
+        /// <summary>
+        /// Drops every piece of smart-path state: the in-flight task, the active waypoint, the
+        /// change-detection record and the repath cooldown.
+        ///
+        /// <para>Two callers, same requirement for opposite reasons. After a link traversal the
+        /// state is stale because the Gargoyle is no longer where it was computed from. On entering
+        /// the search it is stale because the search coroutine is taking over the agent and a
+        /// leftover task would fight it for <c>SetDestination</c>.</para>
+        /// </summary>
+        private void ClearSmartPath(string reason)
         {
-            return SmartPathfindingLinkFlags.InternalTeleports;
+            LGLog.Debug(LogCat.Movement, $"{GargoyleTag} clearing smart path ({reason})");
+
+            // Guarded: ResetPath on an agent that is off the navmesh logs a Unity error and does
+            // nothing useful. InvalidatePathAfterLink always calls this straight after a Warp, so
+            // the guard is normally true; it matters on the entering-search path.
+            if (agent != null && agent.isOnNavMesh)
+                agent.ResetPath();
+
+            pathingTask?.Dispose();
+            pathingTask = null;
+            activeDestination = null;
+            _lastActiveDestination = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+
+            // Let the next tick request immediately rather than sitting on the old cooldown.
+            _nextPathRequestTime = 0f;
         }
+
+        /// <summary>
+        /// Which PathfindingLib smart-links the Gargoyle may traverse.
+        ///
+        /// InternalTeleports is always on and always has been - but it is the ONE flag with nothing
+        /// behind it in the base game. It exists so OTHER mods can register portals through
+        /// SmartPathfinding.RegisterInternalTeleport, so vanilla-only the list is empty. The three
+        /// flags with real content (MainEntrance, FireExits, Elevators) were hardcoded OFF, which
+        /// is why the EntranceTeleport arm above has never once executed.
+        ///
+        /// Both new flags are config-gated and DEFAULT OFF - turning one on is new movement
+        /// behaviour, not a tuning change.
+        /// </summary>
+        private SmartPathfindingLinkFlags GetAllowedLinks() => _allowedLinks;
 
         private bool TryTeleportNearTarget(PlayerControllerB target)
         {
@@ -1459,6 +1956,18 @@ namespace LethalGargoyles.src.Enemy
             return Time.time >= _nextHideEvalTime;
         }
 
+        /// <summary>
+        /// Rate-limits the hide trace to ~1/s. Diagnostic only; costs nothing when the Movement
+        /// category is below Debug, which is the shipped default.
+        /// </summary>
+        private bool HideTraceReady()
+        {
+            if (!LGLog.On(LogCat.Movement, LGLevel.Debug)) return false;
+            if (Time.time < _nextHideTraceTime) return false;
+            _nextHideTraceTime = Time.time + 1.0f;
+            return true;
+        }
+
         bool SetDestinationToHiddenPosition()
         {
             if (Time.time - pathDelayTimer < 2f && agent.hasPath)
@@ -1471,7 +1980,33 @@ namespace LethalGargoyles.src.Enemy
 
             if (distanceToPlayerSqr > idleDistanceSqr)
             {
-                SetSmartDestination(ChooseClosestNodeToPos(cachedTargetPosition, true));
+                // Ranking stays closest-to-player ON PURPOSE. Vanilla's Bracken uses the closest
+                // node to stalk and the FARTHEST to flee, and by that reading this is the wrong
+                // primitive - but the Gargoyle is meant to stay near you and be unsettling, not to
+                // run away. Nearest-hidden-first gives "creeps as close as he can, but only through
+                // places you cannot see", which is the design. Retreat is now handled separately,
+                // by FallBackWhenNoCover, and only once this has genuinely found nothing.
+                Vector3 node = ChooseClosestNodeToPos(cachedTargetPosition, avoidLineOfSight: true,
+                                                      requireHiddenFromPlayers: true);
+
+                _hideFoundCover = !_nodeChoiceFellBack;
+
+                if (HideTraceReady())
+                    LGLog.Debug(LogCat.Movement,
+                        $"{GargoyleTag} hide=FAR cover={_hideFoundCover} seen={isSeen} " +
+                        $"moved={(isSeen && _corneredSince > 0f ? $"{Vector3.Distance(transform.position, _corneredAnchorPos):0.0}m in {Time.time - _corneredSince:0.0}s" : "n/a")} " +
+                        $"dist={Mathf.Sqrt(distanceToPlayerSqr):0.0}m idle={Mathf.Sqrt(idleDistanceSqr):0.0}m " +
+                        (_hideFoundCover
+                            ? $"node={node.ToString("0.0")} ({Vector3.Distance(transform.position, node):0.0}m away)"
+                            : "node=NONE -> handing off to the back-off"));
+
+                // Report the truth. This branch used to return true unconditionally, which meant a
+                // failed search still looked like success and the caller never got the chance to
+                // back off - it just walked to whatever visible node ranked best and stopped there.
+                if (!_hideFoundCover)
+                    return false;
+
+                SetSmartDestination(node);
                 return true;
             }
 
@@ -1491,44 +2026,126 @@ namespace LethalGargoyles.src.Enemy
             Transform? targetPlayerTransform = targetPlayer?.transform;
 
             if (coverPoints.Count == 0 || targetPlayerTransform == null)
-                return false;
-
-            Vector3 bestCoverPoint = default;
-            float minDistanceSqr = awareDistSqr;
-
-            foreach (var coverPoint in coverPoints)
             {
-                float distanceSqr = (targetPlayerTransform.position - coverPoint).sqrMagnitude;
-                if (distanceSqr >= bufferDistSqr && distanceSqr < minDistanceSqr)
-                {
-                    bestCoverPoint = coverPoint;
-                    minDistanceSqr = distanceSqr;
-                }
+                _hideFoundCover = false;
+                if (HideTraceReady())
+                    LGLog.Debug(LogCat.Movement,
+                        $"{GargoyleTag} hide=NEAR dist={Mathf.Sqrt(distanceToPlayerSqr):0.0}m -> NO COVER POINTS " +
+                        $"(target={(targetPlayerTransform == null ? "null" : "ok")}); caller will walk straight at the player");
+                return false;
             }
 
-            if (bestCoverPoint == default)
+            // Four rejections is a compromise, not a magic number. IsVisibleToAnyRelevantPlayer
+            // costs one HasLineOfSightToPosition per live player, and this can be running on six
+            // Gargoyles at once, so an unbounded "keep trying until one is genuinely hidden" loop
+            // is not affordable. Whatever is left stale gets pruned on the next evaluation instead.
+            const int MAX_STALE_COVER_REJECTS = 4;
+
+            Vector3 bestCoverPoint = default;
+            float minDistanceSqr = float.MaxValue;
+            int staleRejects = 0;
+
+            for (int attempt = 0; attempt <= MAX_STALE_COVER_REJECTS; attempt++)
             {
-                minDistanceSqr = float.MaxValue;
-                foreach (var coverPoint in coverPoints)
-                {
-                    float distanceSqr = (targetPlayerTransform.position - coverPoint).sqrMagnitude;
-                    if (distanceSqr >= aggroRangeSqr + 2f && distanceSqr < minDistanceSqr)
-                    {
-                        bestCoverPoint = coverPoint;
-                        minDistanceSqr = distanceSqr;
-                    }
-                }
+                bestCoverPoint = PickCoverPointInBand(coverPoints, targetPlayerTransform.position, out minDistanceSqr);
+
+                if (bestCoverPoint == default)
+                    break;
+
+                // RE-TEST VISIBILITY HERE, because the harvest-time verdict goes stale.
+                // FindCoverPointsAroundTarget filters every point through this same check once, and
+                // the list is then cached until the player moves 3m or the cooldown expires - so a
+                // player who stands still and simply TURNS AROUND leaves every point in the cache
+                // still flagged hidden while being in plain view. He would walk to one, stand there
+                // exposed, re-pick the very same point because it is still the nearest, and never
+                // move again until the cornered timer bailed him out.
+                //
+                // Measured in the 2026-08-16 log: 4 of 23 hide evaluations chose a point 0.0-0.2m
+                // away - he was standing ON it - and BOTH cornered escalations in that session were
+                // directly preceded by one of those lines.
+                if (!IsVisibleToAnyRelevantPlayer(bestCoverPoint))
+                    break;
+
+                // Drop it for good rather than merely skipping it this once. Pruning is what stops
+                // the same dead point being re-picked on every later evaluation, and an empty list
+                // is itself a rebuild trigger, so the cache heals rather than rotting.
+                coverPoints.Remove(bestCoverPoint);
+                bestCoverPoint = default;
+                staleRejects++;
             }
 
             if (bestCoverPoint != default)
             {
+                _hideFoundCover = true;
+
+                if (HideTraceReady())
+                    LGLog.Debug(LogCat.Movement,
+                        $"{GargoyleTag} hide=NEAR dist={Mathf.Sqrt(distanceToPlayerSqr):0.0}m -> cover point " +
+                        $"{Mathf.Sqrt(minDistanceSqr):0.0}m from player, {Vector3.Distance(transform.position, bestCoverPoint):0.0}m away " +
+                        $"(from {coverPoints.Count} candidates, band {Mathf.Sqrt(bufferDistSqr):0.0}-{Mathf.Sqrt(awareDistSqr):0.0}m" +
+                        (staleRejects > 0 ? $", {staleRejects} stale point(s) pruned)" : ")"));
+
                 SetSmartDestination(bestCoverPoint);
                 pathDelayTimer = Time.time;
                 return true;
             }
 
+            _hideFoundCover = false;
+
+            // Both passes failed: cover points exist but every one of them is outside the accepted
+            // distance band from the player. Worth calling out separately from "no cover points at
+            // all" - the two have completely different causes and the old log conflated them.
+            if (HideTraceReady())
+                LGLog.Debug(LogCat.Movement,
+                    $"{GargoyleTag} hide=NEAR dist={Mathf.Sqrt(distanceToPlayerSqr):0.0}m -> {coverPoints.Count} cover points but NONE " +
+                    $"in band {Mathf.Sqrt(bufferDistSqr):0.0}-{Mathf.Sqrt(awareDistSqr):0.0}m, and none past fallback {Mathf.Sqrt(aggroRangeSqr + 2f):0.0}m" +
+                    (staleRejects > 0 ? $" ({staleRejects} stale point(s) pruned this pass)" : ""));
+
             LogIfDebugBuild("No suitable hiding spot found.");
             return false;
+        }
+
+        /// <summary>
+        /// Nearest cover point to the player that sits in the accepted distance band, falling back
+        /// to anything past aggro range when the band itself comes up empty. Returns
+        /// <c>default</c> when neither pass finds anything.
+        ///
+        /// <para>Lifted verbatim out of <see cref="SetDestinationToHiddenPosition"/> so the caller
+        /// can run it more than once - it now has to be able to reject a pick and ask again.
+        /// The two-pass shape and the ordering are unchanged: nearest-to-the-player still wins,
+        /// which is what keeps him uncomfortably close rather than fleeing.</para>
+        /// </summary>
+        private Vector3 PickCoverPointInBand(List<Vector3> coverPoints, Vector3 playerPosition, out float pickedDistSqr)
+        {
+            Vector3 best = default;
+            float minDistanceSqr = awareDistSqr;
+
+            foreach (var coverPoint in coverPoints)
+            {
+                float distanceSqr = (playerPosition - coverPoint).sqrMagnitude;
+                if (distanceSqr >= bufferDistSqr && distanceSqr < minDistanceSqr)
+                {
+                    best = coverPoint;
+                    minDistanceSqr = distanceSqr;
+                }
+            }
+
+            if (best == default)
+            {
+                minDistanceSqr = float.MaxValue;
+                foreach (var coverPoint in coverPoints)
+                {
+                    float distanceSqr = (playerPosition - coverPoint).sqrMagnitude;
+                    if (distanceSqr >= aggroRangeSqr + 2f && distanceSqr < minDistanceSqr)
+                    {
+                        best = coverPoint;
+                        minDistanceSqr = distanceSqr;
+                    }
+                }
+            }
+
+            pickedDistSqr = minDistanceSqr;
+            return best;
         }
 
         public List<Vector3> FindCoverPointsAroundTarget()
@@ -1536,8 +2153,16 @@ namespace LethalGargoyles.src.Enemy
             List<Vector3> coverPoints = [];
 
             Vector3 targetPlayerPosition = cachedTargetPosition;
-            Bounds playerBounds = new(targetPlayerPosition, new Vector3(40, 2, 40));
-            Bounds gargoyleBounds = new(transform.position, new Vector3(40, 2, 40));
+            // Y WAS 2, AND UNITY'S Bounds TAKES A FULL SIZE, NOT EXTENTS - so this box was +/-20m
+            // horizontally but only +/-1m VERTICALLY. Any AI node more than a metre above or below
+            // both the player and the Gargoyle was excluded no matter how close it was, which on
+            // stairs or across floors is nearly all of them. The cachedAllAINodes fallback reapplies
+            // the same bounds, so it rescued nothing. An empty node list yields zero cover points,
+            // and BOTH callers respond to zero cover points by pathing straight at the player -
+            // i.e. in a stairwell the "hide" behaviour was literally "walk at the person watching
+            // you". 20 is +/-10m, which spans a floor or two without dragging in the whole level.
+            Bounds playerBounds = new(targetPlayerPosition, new Vector3(40, 20, 40));
+            Bounds gargoyleBounds = new(transform.position, new Vector3(40, 20, 40));
 
             var players = StartOfRound.Instance.allPlayerScripts;
 
@@ -1591,36 +2216,53 @@ namespace LethalGargoyles.src.Enemy
                     if (PathIsIntersectedByLOS(potentialPos, calculatePathDistance: false, avoidLineOfSight: true))
                         continue;
 
-                    bool seenByAnyRelevantPlayer = false;
-
-                    for (int p = 0; p < players.Length; p++)
-                    {
-                        var player = players[p];
-                        if (player.isPlayerDead || !player.isPlayerControlled)
-                            continue;
-
-                        if (isOutside != player.isInsideFactory)
-                            continue;
-
-                        Vector3 playerPos = player.transform.position;
-                        if (!playerBounds.Contains(playerPos) && !gargoyleBounds.Contains(playerPos))
-                            continue;
-
-                        if (player.HasLineOfSightToPosition(potentialPos, 60f, 60, 25f))
-                        {
-                            seenByAnyRelevantPlayer = true;
-                            break;
-                        }
-                    }
-
-                    if (!seenByAnyRelevantPlayer)
+                    if (!IsVisibleToAnyRelevantPlayer(potentialPos))
                     {
                         coverPoints.Add(potentialPos);
                     }
                 }
             }
 
+            // The node count is the number to watch. Both Bounds above are built as
+            // `new Bounds(centre, new Vector3(40, 2, 40))`, and Unity's Bounds takes a FULL size -
+            // so that is +/-20m horizontally but only +/-1m VERTICALLY. On stairs or across floors
+            // a node one storey up is excluded no matter how close it is horizontally. If this logs
+            // nodes=0 while the Gargoyle is clearly near AI nodes, that Y extent is the reason.
+            if (LGLog.On(LogCat.Movement, LGLevel.Debug))
+                LGLog.Debug(LogCat.Movement,
+                    $"{GargoyleTag} cover rebuild: {validAINodes.Count} nodes in bounds (+/-20m XZ, +/-10m Y) -> {coverPoints.Count} cover points" +
+                    (validAINodes.Count == 0 ? " [NO NODES near the target - hide will fall through to walking at the player]" : ""));
+
             return coverPoints;
+        }
+
+        /// <summary>
+        /// Can any living player in the Gargoyle's own region currently see this point?
+        ///
+        /// Lifted out of FindCoverPointsAroundTarget so the &gt;idleDistance hide branch can use the
+        /// same test. That branch had NO player-visibility check at all - it filtered only on
+        /// whether the ROUTE crossed line-of-sight geometry, never on whether the DESTINATION was
+        /// somewhere the player could see. So the "get out of sight" path could happily pick a spot
+        /// in the middle of the watcher's view, which is precisely the "he can't get out of my view"
+        /// report. Deliberately drops the &plusmn;20m bounds filter the cover search applies to
+        /// players: at &gt;20m the whole point is that the watcher may be outside that box.
+        /// </summary>
+        private bool IsVisibleToAnyRelevantPlayer(Vector3 point)
+        {
+            var players = StartOfRound.Instance.allPlayerScripts;
+            for (int p = 0; p < players.Length; p++)
+            {
+                var player = players[p];
+                if (player == null || player.isPlayerDead || !player.isPlayerControlled)
+                    continue;
+
+                if (isOutside != player.isInsideFactory)
+                    continue;
+
+                if (player.HasLineOfSightToPosition(point, 60f, 60, 25f))
+                    return true;
+            }
+            return false;
         }
 
         // Scratch buffers, reused across calls. This runs every Update tick from
@@ -1644,12 +2286,37 @@ namespace LethalGargoyles.src.Enemy
         /// Now the cheap squared-distance sort happens first and only the nearest few are
         /// pathed, stopping as soon as enough have passed.
         /// </summary>
-        public Vector3 ChooseClosestNodeToPos(Vector3 pos, bool avoidLineOfSight = false, int offset = 0)
+        /// <param name="requireHiddenFromPlayers">
+        /// Reject any node a living same-region player can currently SEE. The hide branch needs
+        /// this; the "get to the player" fallback in GetTargetPosition must not have it.
+        /// </param>
+        /// <param name="preferFarFromPos">
+        /// Rank FARTHEST from <paramref name="pos"/> instead of nearest. This is the retreat
+        /// primitive, and vanilla splits the same way: the Bracken uses closest-to-player to stalk
+        /// and farthest-from-player to flee.
+        /// </param>
+        public Vector3 ChooseClosestNodeToPos(Vector3 pos, bool avoidLineOfSight = false, int offset = 0,
+                                              bool requireHiddenFromPlayers = false,
+                                              bool preferFarFromPos = false)
         {
-            // How many nodes we are willing to run the expensive check on. If none of the
-            // nearest MAX_PATH_CHECKS pass, we give up and let the caller fall back - which is
-            // the same outcome the old code reached when every node failed, just far sooner.
+            // How many nodes we are willing to run the expensive check on.
             const int MAX_PATH_CHECKS = 24;
+
+            // Separate, much larger budget for the CHEAP filter. Visibility is a distance and angle
+            // test that mostly early-outs, then at worst one linecast per player; PathIsIntersected-
+            // ByLOS is a full navmesh solve plus up to 12 linecasts. Testing visibility over a wide
+            // ring and pathing only the survivors buys a far longer reach for less work than the old
+            // arrangement, which path-checked the 24 nodes NEAREST THE PLAYER and gave up. Those 24
+            // are the likeliest nodes in the level to be in the player's view, which is why he kept
+            // finding nothing and stopping.
+            const int MAX_VISIBILITY_SCANS = 160;
+            const int HIDDEN_CANDIDATES_WANTED = 8;
+
+            // When hiding, refuse nodes we are basically standing on. Vanilla's Bracken does the
+            // same for its evade destination (FlowermanAI discards results within 5m of itself);
+            // without a floor the "best" node is regularly the one under our feet, which produces
+            // a destination we have already arrived at.
+            const float MIN_SELF_DIST_SQR = 25f;
 
             _nodeScratch.Clear();
             if (isOutside)
@@ -1666,28 +2333,87 @@ namespace LethalGargoyles.src.Enemy
             int need = Mathf.Max(0, offset) + 1;
 
             // Cheap pass: squared distance only, no pathing, no raycasts.
+            Vector3 self = transform.position;
             _candidateScratch.Clear();
             for (int i = 0; i < _nodeScratch.Count; i++)
             {
                 var t = _nodeScratch[i].transform;
+                if (requireHiddenFromPlayers && (self - t.position).sqrMagnitude < MIN_SELF_DIST_SQR)
+                    continue;
                 _candidateScratch.Add(((pos - t.position).sqrMagnitude, t));
             }
-            _candidateScratch.Sort(static (a, b) => a.distSqr.CompareTo(b.distSqr));
 
-            // Expensive pass: nearest first, bounded, stop as soon as we have enough.
-            _bestScratch.Clear();
-            int checks = Mathf.Min(_candidateScratch.Count, MAX_PATH_CHECKS);
-            for (int i = 0; i < checks && _bestScratch.Count < need; i++)
+            if (_candidateScratch.Count == 0)
             {
-                var cand = _candidateScratch[i];
-                if (PathIsIntersectedByLOS(cand.t.position, calculatePathDistance: false, avoidLineOfSight))
-                    continue;
-                _bestScratch.Add(cand);
+                _nodeChoiceFellBack = true;
+                return self;
+            }
+
+            if (preferFarFromPos)
+                _candidateScratch.Sort(static (a, b) => b.distSqr.CompareTo(a.distSqr));
+            else
+                _candidateScratch.Sort(static (a, b) => a.distSqr.CompareTo(b.distSqr));
+
+            _bestScratch.Clear();
+
+            if (requireHiddenFromPlayers)
+            {
+                // TWO PHASES, WIDE THEN DEEP. Walk outward from the player running only the cheap
+                // visibility test, collecting the first few genuinely hidden nodes however far out
+                // they turn out to be, and only then pay for navmesh solves on those. Ordering is
+                // preserved, so the nearest hidden node still wins - he creeps as close as he can
+                // while staying out of sight, rather than settling for the least-bad visible spot.
+                int scans = Mathf.Min(_candidateScratch.Count, MAX_VISIBILITY_SCANS);
+                for (int i = 0; i < scans && _bestScratch.Count < HIDDEN_CANDIDATES_WANTED; i++)
+                {
+                    if (!IsVisibleToAnyRelevantPlayer(_candidateScratch[i].t.position))
+                        _bestScratch.Add(_candidateScratch[i]);
+                }
+
+                for (int i = 0; i < _bestScratch.Count; i++)
+                {
+                    var cand = _bestScratch[i];
+                    if (PathIsIntersectedByLOS(cand.t.position, calculatePathDistance: false, avoidLineOfSight))
+                        continue;
+
+                    _nodeChoiceFellBack = false;
+                    mostOptimalDistance = Mathf.Sqrt(cand.distSqr);
+                    return cand.t.position;
+                }
+
+                _bestScratch.Clear();
+            }
+            else
+            {
+                int checks = Mathf.Min(_candidateScratch.Count, MAX_PATH_CHECKS);
+                for (int i = 0; i < checks && _bestScratch.Count < need; i++)
+                {
+                    var cand = _candidateScratch[i];
+                    if (PathIsIntersectedByLOS(cand.t.position, calculatePathDistance: false, avoidLineOfSight))
+                        continue;
+                    _bestScratch.Add(cand);
+                }
             }
 
             if (_bestScratch.Count == 0)
-                return transform.position;
+            {
+                // NEVER transform.position. Handing our own position back as a destination parks
+                // the agent: it arrives instantly, agent.hasPath goes false, the animation drops to
+                // Idle, and the next evaluation recomputes the identical answer - a stable stall
+                // that only ends if the player moves. Batch G's 24-candidate cap widened this a
+                // lot, because it now fires whenever the nearest 24 fail even though node 25 would
+                // have passed; before the cap it needed EVERY node in the level to fail.
+                //
+                // Vanilla's ChooseClosestNodeToPosition falls back to the best-ranked node
+                // regardless of its line-of-sight verdict, so do the same. An imperfect destination
+                // still moves us, and moving is what breaks the loop.
+                _nodeChoiceFellBack = true;
+                var fallback = _candidateScratch[0];
+                mostOptimalDistance = Mathf.Sqrt(fallback.distSqr);
+                return fallback.t.position;
+            }
 
+            _nodeChoiceFellBack = false;
             var chosen = _bestScratch[_bestScratch.Count - 1];
             mostOptimalDistance = Mathf.Sqrt(chosen.distSqr);
             return chosen.t.position;
@@ -1832,45 +2558,89 @@ namespace LethalGargoyles.src.Enemy
             gargoyleTargets[myID] = newTarget;
         }
 
+        /// <summary>
+        /// Acquisition and rebalance for SearchingForPlayer. Returns true when this gargoyle holds
+        /// a target and may switch to StealthyPursuit.
+        ///
+        /// THE SUBTLETY THAT BROKE THIS ONCE: this gargoyle's OWN claim is in targetCounts.
+        /// GetGargoyleTargetCounts walks every gargoyle in `gargoyles`, us included, so a player we
+        /// already hold always comes back with at least 1 against them. The old code compared that
+        /// undiscounted count, and in every case EXCEPT an over-subscribed target it fell into
+        /// `else { SetTarget(null); }` - dropping a claim it had no reason to drop - then asked
+        /// FindBestTarget for a replacement using the SAME now-stale counts, where our own
+        /// just-released claim still stood against us. With fairShare 1 (one gargoyle, or fewer
+        /// gargoyles than players) the player we had just let go was then the one player
+        /// FindBestTarget would refuse, so re-acquiring it always slipped a tick and the claim was
+        /// briefly visible to every other gargoyle as unclaimed. Self-correcting, but it made
+        /// re-engagement jittery and let two gargoyles double up through the gap.
+        ///
+        /// So: discount our own claim ONCE, up front. Every question below then reads as "how
+        /// crowded is this player other than me", which is what was always meant.
+        ///
+        /// ChangeTarget deliberately does NOT do this. It asks a different question - "is this
+        /// player over-subscribed across the whole pack" - and there our own claim SHOULD count.
+        /// </summary>
         bool FoundClosestPlayerInRange()
         {
             Dictionary<PlayerControllerB, int> targetCounts = GetGargoyleTargetCounts();
 
             int fairShare = CalculateFairShare();
 
-            if (targetPlayer != null &&
-                targetCounts.ContainsKey(targetPlayer) &&
-                targetCounts[targetPlayer] > 1 &&
-                validPlayers.Count > 1)
+            // targetCounts is keyed on validPlayers, so absence from it IS the validity check:
+            // the target died, disconnected, or left through the entrance.
+            if (targetPlayer != null && !targetCounts.ContainsKey(targetPlayer))
             {
-                var newTarget = FindBestTarget(targetCounts, fairShare);
-
-                if (newTarget != null && newTarget != targetPlayer)
-                {
-                    LGLog.Debug(LogCat.Targeting, $"{GargoyleTag} retargeting from {targetPlayer.playerClientId} to {newTarget.playerClientId} (fairShare {fairShare})");
-                    SetTarget(newTarget);
-                }
-            }
-            else
-            {
+                LGLog.Debug(LogCat.Targeting, $"{GargoyleTag} dropping target {targetPlayer.playerClientId} (no longer a valid player)");
                 SetTarget(null);
             }
 
-            if (targetPlayer == null)
-            {
-                var acquired = FindBestTarget(targetCounts, fairShare);
+            PlayerControllerB? held = targetPlayer;
 
-                if (acquired != null)
+            if (held != null)
+            {
+                targetCounts[held]--;
+
+                bool overSubscribed = validPlayers.Count > 1 && targetCounts[held] >= fairShare;
+                // Retention range, deliberately wider than the acquisition range FindBestTarget
+                // uses. Keeping both at awareDistSqr made a player standing on the boundary get
+                // released and re-acquired repeatedly - four full cycles back to back in the
+                // 2026-08-16 log, each one costing a state reset and a fresh search.
+                bool inRange = (transform.position - held.transform.position).sqrMagnitude <= awareKeepDistSqr;
+
+                // Nothing wrong with what we already have. Keep it, and keep the claim intact.
+                if (!overSubscribed && inRange)
                 {
-                    LGLog.Debug(LogCat.Targeting, $"{GargoyleTag} acquired target {acquired.playerClientId} (fairShare {fairShare}, {gargoyles.Count} gargoyle(s), {validPlayers.Count} valid player(s))");
-                    SetTarget(acquired);
                     return true;
                 }
 
+                var better = FindBestTarget(targetCounts, fairShare);
+
+                if (better != null)
+                {
+                    if (better != held)
+                    {
+                        LGLog.Debug(LogCat.Targeting, $"{GargoyleTag} retargeting from {held.playerClientId} to {better.playerClientId} (fairShare {fairShare})");
+                        SetTarget(better);
+                    }
+
+                    return true;
+                }
+
+                LGLog.Debug(LogCat.Targeting, $"{GargoyleTag} released target {held.playerClientId} (overSubscribed {overSubscribed}, inRange {inRange})");
+                SetTarget(null);
                 return false;
             }
 
-            return true;
+            var acquired = FindBestTarget(targetCounts, fairShare);
+
+            if (acquired != null)
+            {
+                LGLog.Debug(LogCat.Targeting, $"{GargoyleTag} acquired target {acquired.playerClientId} (fairShare {fairShare}, {gargoyles.Count} gargoyle(s), {validPlayers.Count} valid player(s))");
+                SetTarget(acquired);
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -2154,7 +2924,7 @@ namespace LethalGargoyles.src.Enemy
                     continue;
                 }
 
-                NavMeshPath path = new();
+                NavMeshPath path = _zoneScratchPath ??= new NavMeshPath();
                 if (!CheckForPath(from, to, path))
                 {
                     if (Time.time >= _nextZoneFailLogTime)
@@ -2624,9 +3394,9 @@ namespace LethalGargoyles.src.Enemy
             lastAttackTime = Time.time;
             SetAnim(AnimState.SwingAttack);
             PlayVoice(Utility.AudioManager.attackClips, "attack");
-            player.DamagePlayer(2, false, true, CauseOfDeath.Gravity);
 
             Vector3 pushDirection;
+            Vector3 pushForce;
             if (killTrigger != null)
             {
                 Transform? nearestRailing = FindNearestRailing(player.transform.position);
@@ -2649,16 +3419,51 @@ namespace LethalGargoyles.src.Enemy
                 }
 
                 pushDirection = pushDirection.normalized * 15f;
-                player.externalForceAutoFade = pushDirection * 1.5f;
+                pushForce = pushDirection * 1.5f;
             }
             else
             {
                 LogIfDebugBuild("Pushing player forward");
                 pushDirection = player.transform.forward * 15f;
-                player.externalForceAutoFade = pushDirection;
+                pushForce = pushDirection;
+            }
+
+            // Damage and knockback are OWNER-AUTHORITATIVE in Lethal Company, and this method
+            // only ever runs on the server (Update returns early on !IsOwner). Vanilla
+            // DamagePlayer opens with `if (!IsOwner ...) return;`, and externalForceAutoFade is
+            // consumed inside PlayerControllerB.Update behind the same owner gate - so writing
+            // either one here landed on the server's dead replica of a remote player and did
+            // NOTHING for anyone but the host. Confirmed in game 2026-08-16 (audit finding C3).
+            // The push therefore has to be handed to the machine that owns the victim.
+            // Broadcast-and-filter rather than ClientRpcParams: it is a handful of bytes to the
+            // other clients and it avoids mapping player index to NGO client id, which is the
+            // part that goes wrong.
+            if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
+            {
+                ApplyPushClientRpc((int)player.playerClientId, pushForce);
             }
 
             StartCoroutine(SetCauseOfDeathDelay(player, "Push"));
+        }
+
+        /// <summary>
+        /// Applies the push damage and knockback on the victim's OWN machine, which is the only
+        /// place Lethal Company will honour either. Every client receives this; all but the
+        /// target return immediately.
+        /// </summary>
+        [ClientRpc]
+        private void ApplyPushClientRpc(int playerId, Vector3 pushForce)
+        {
+            PlayerControllerB? local = GameNetworkManager.Instance != null
+                ? GameNetworkManager.Instance.localPlayerController
+                : null;
+
+            if (local == null || (int)local.playerClientId != playerId) return;
+
+            LGLog.Debug(LogCat.Combat, $"{GargoyleTag} pushing local player {playerId} with force {pushForce} (magnitude {pushForce.magnitude:F1})");
+
+            local.DamagePlayer(PUSH_DAMAGE, false, true, CauseOfDeath.Gravity);
+            local.externalForceAutoFade = pushForce;
         }
 
         public IEnumerator SetCauseOfDeathDelay(PlayerControllerB player, string deathType)
@@ -2811,14 +3616,14 @@ namespace LethalGargoyles.src.Enemy
 
         private bool TryPlayPlayerSpecificTaunt(int randInt, PlayerControllerB player)
         {
-            if (randInt >= 160 && randInt < 175 && player.playerSteamId != 0 && Time.time - lastSteamIDTauntTime > 90f &&
+            if (randInt >= 160 && randInt < 175 && player.playerSteamId != 0 && Time.time - lastSteamIDTauntTime > steamIDTauntCooldown &&
                 ChooseRandomClip($"{player.playerSteamId}", "SteamIDs", out string? playerClip) && playerClip != null)
             {
                 TauntClientRpc(playerClip, "steamids");
                 LGLog.Debug(LogCat.Taunt, $"{GargoyleTag} SteamID taunt for {player.playerUsername} (roll {randInt}, {genTauntCount} general taunts since last special)");
                 genTauntCount = 0;
                 // Both timers, on success. lastSteamIDTauntTime was assigned exactly once - in
-                // Start, as Time.time - 91f - and never again, so the 90s cooldown above was
+                // Start, backdated past the cooldown - and never again, so the gate above was
                 // permanently satisfied and personal lines could fire back to back. And without
                 // the general timer, Taunt() re-ran every frame because its caller gates on
                 // lastGenTauntTime, which only OtherTaunt was updating.
