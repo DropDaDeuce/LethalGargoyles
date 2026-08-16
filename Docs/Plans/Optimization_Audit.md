@@ -8,7 +8,7 @@
 >
 > | Commit | Covers |
 > |---|---|
-> | `61cc313` | **Batch A** — `LGLog`, crash guards, all statue fixes (incl. C1, E11, E12) |
+> | `61cc313` | **Batch A** — `LGLog`, crash guards, all statue fixes (incl. C1, E11, E12). **⚠ C1 in this commit was WRONG and was reverted in `48d5e64` — see the C1 row below before touching `GargoyleStatue.ItemActivate`.** |
 > | `0a9ff00` | **Batch E (partial)** — E1, E2, E3, E4, E5, E9, E10, D3, G12 |
 > | `3f92b72` | **Batch F** — F1, F2, F3, F6, A9, A10 |
 > | `a1dac4b` | **Batches C/D/G (partial)** — C2, D1, D2, D4, G3, G4 |
@@ -129,7 +129,7 @@ Every item here is invisible when you test as host. **This batch cannot be verif
 
 | ID | Finding | Tag |
 |---|---|---|
-| **C1** | **Statue is mute for non-hosts.** `ItemActivate` gates `ItemActivateServerRpc` behind `IsServer` — but that RPC is `RequireOwnership = false` precisely so a non-authoritative client can send it. Drop the `IsServer`; keep the `scrapAudio` check. | `watch` ×2 |
+| **C1** | ~~Statue is mute for non-hosts.~~ **FALSE POSITIVE — WITHDRAWN 2026-08-16 (b13). DO NOT ACT ON THIS. The `IsServer` guard is load-bearing; putting it back is the fix.** Two independent audit agents agreed on it and both were wrong, because both assumed `ItemActivate` runs only on the activating client. **It does not — vanilla REPLICATES it to every machine.** Proven by an instrumented log: the host runs `ItemActivate` for a client-held item (`server=True owner=False heldBy=Player #1`). The guard is what makes exactly one machine forward the ServerRpc. It was dropped in `61cc313`, which multiplied the statue's taunt by machine count — two players, two overlapping voices — and was reverted in `48d5e64`. **The statue was never mute for non-hosts; the host's replicated copy always fired the taunt.** Recorded in `CLAUDE.md` → *Do-not-relearn*. | **withdrawn** |
 | **C2** | **`TauntClientRpc` sent from non-server clients in four places** — `HitEnemy`, `KillEnemy`, `OnCollideWithPlayer`→`AttackPlayer`, and `GargoyleStatue.Update`. Vanilla `HitEnemy`/`KillEnemy` are driven by ClientRpcs and run on *every* client, so every shovel hit throws an NGO "only the server can invoke a ClientRpc" on every non-host machine. `SetAnim` already has the guard — the taunt sends never got it. | `watch` |
 | **C3** | **Push and push-damage never reach clients.** `PushPlayer`/`AttackPlayer` call `DamagePlayer` and set `externalForceAutoFade` on the *server's* copy of a remote `PlayerControllerB`. Damage and movement are owner-authoritative in Lethal Company — that's why vanilla ships `DamagePlayerFromOtherClientServerRpc`. Melee still works for clients only because `OnCollideWithPlayer` runs on the victim's machine. **PLAUSIBLE, and the cheapest test in this document: have a second player stand still, back turned, next to a ledge. If they are never moved, this is it.** | `watch` |
 | **C4** | **`AttackPlayer` writes AI state on the colliding client** — `lastAttackTime`, `agent.speed = 0f`, `LookAtTarget`, and `targetPlayer = null` on death. Contained today (the consumers are `IsOwner`-guarded), but it is a gameplay write on a client and turns into a desync the moment someone reads `targetPlayer` earlier in `Update`. | `safe` |
