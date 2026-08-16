@@ -1441,10 +1441,20 @@ namespace LethalGargoyles.src.Enemy
         // 7) Hiding / cover selection
         // ============================================================
 
+        /// <summary>
+        /// Throttles the (expensive) hide evaluation.
+        ///
+        /// The no-path / pending / invalid escape hatch used to return true UNCONDITIONALLY -
+        /// but that is exactly the state a gargoyle sits in while it is re-pathing, which is
+        /// precisely when the evaluation is most expensive. So HIDE_EVAL_INTERVAL was bypassed
+        /// whenever it mattered and the search could run every single frame. The escape hatch is
+        /// still there (it must be, or a stuck agent never re-evaluates) but it now obeys a short
+        /// floor instead of no floor at all.
+        /// </summary>
         private bool ShouldEvaluateHide()
         {
             if (!agent.hasPath || agent.pathPending || agent.pathStatus == NavMeshPathStatus.PathInvalid)
-                return true;
+                return Time.time >= _nextHideEvalTime - (HIDE_EVAL_INTERVAL - 0.10f);
 
             return Time.time >= _nextHideEvalTime;
         }
@@ -1613,43 +1623,72 @@ namespace LethalGargoyles.src.Enemy
             return coverPoints;
         }
 
+        // Scratch buffers, reused across calls. This runs every Update tick from
+        // HandleStealthyPursuitState and HandleGetOutOfSightState, so per-call List allocation
+        // here was pure garbage.
+        private readonly List<GameObject> _nodeScratch = [];
+        private readonly List<(float distSqr, Transform t)> _candidateScratch = [];
+        private readonly List<(float distSqr, Transform t)> _bestScratch = [];
+
+        /// <summary>
+        /// Picks a nearby AI node that is not visible along the path to it.
+        ///
+        /// SORT FIRST, PATH SECOND. This used to call PathIsIntersectedByLOS - a full
+        /// agent.CalculatePath plus a NavMesh.SamplePosition plus up to 12 Physics.Linecasts -
+        /// on EVERY node, and only then compute distance and sort. On a 100-200 node interior
+        /// that was 100-200 navmesh solves in a single frame, per gargoyle, and it paid full
+        /// price for nodes 300m away that could never win. A playtest measured
+        /// HandleStealthyPursuitState at 13.6ms average and 26ms peak against a 16.67ms frame
+        /// budget, with four gargoyles alive - this was the stutter.
+        ///
+        /// Now the cheap squared-distance sort happens first and only the nearest few are
+        /// pathed, stopping as soon as enough have passed.
+        /// </summary>
         public Vector3 ChooseClosestNodeToPos(Vector3 pos, bool avoidLineOfSight = false, int offset = 0)
         {
-            List<GameObject> validAINodes = [];
+            // How many nodes we are willing to run the expensive check on. If none of the
+            // nearest MAX_PATH_CHECKS pass, we give up and let the caller fall back - which is
+            // the same outcome the old code reached when every node failed, just far sooner.
+            const int MAX_PATH_CHECKS = 24;
+
+            _nodeScratch.Clear();
             if (isOutside)
             {
-                foreach (var node in cachedOutsideAINodes) if (node != null) validAINodes.Add(node);
-                if (validAINodes.Count == 0) foreach (var node in cachedAllAINodes) if (node != null) validAINodes.Add(node);
+                foreach (var node in cachedOutsideAINodes) if (node != null) _nodeScratch.Add(node);
+                if (_nodeScratch.Count == 0) foreach (var node in cachedAllAINodes) if (node != null) _nodeScratch.Add(node);
             }
             else
             {
-                foreach (var node in cachedInsideAINodes) if (node != null) validAINodes.Add(node);
-                if (validAINodes.Count == 0) foreach (var node in cachedAllAINodes) if (node != null) validAINodes.Add(node);
+                foreach (var node in cachedInsideAINodes) if (node != null) _nodeScratch.Add(node);
+                if (_nodeScratch.Count == 0) foreach (var node in cachedAllAINodes) if (node != null) _nodeScratch.Add(node);
             }
 
             int need = Mathf.Max(0, offset) + 1;
-            var best = new List<(float distSqr, Transform t)>(need);
 
-            for (int i = 0; i < validAINodes.Count; i++)
+            // Cheap pass: squared distance only, no pathing, no raycasts.
+            _candidateScratch.Clear();
+            for (int i = 0; i < _nodeScratch.Count; i++)
             {
-                var t = validAINodes[i].transform;
+                var t = _nodeScratch[i].transform;
+                _candidateScratch.Add(((pos - t.position).sqrMagnitude, t));
+            }
+            _candidateScratch.Sort(static (a, b) => a.distSqr.CompareTo(b.distSqr));
 
-                if (PathIsIntersectedByLOS(t.position, calculatePathDistance: false, avoidLineOfSight))
+            // Expensive pass: nearest first, bounded, stop as soon as we have enough.
+            _bestScratch.Clear();
+            int checks = Mathf.Min(_candidateScratch.Count, MAX_PATH_CHECKS);
+            for (int i = 0; i < checks && _bestScratch.Count < need; i++)
+            {
+                var cand = _candidateScratch[i];
+                if (PathIsIntersectedByLOS(cand.t.position, calculatePathDistance: false, avoidLineOfSight))
                     continue;
-
-                float d = (pos - t.position).sqrMagnitude;
-
-                int insertAt = best.FindIndex(x => d < x.distSqr);
-                if (insertAt < 0) insertAt = best.Count;
-
-                best.Insert(insertAt, (d, t));
-                if (best.Count > need) best.RemoveAt(best.Count - 1);
+                _bestScratch.Add(cand);
             }
 
-            if (best.Count == 0)
+            if (_bestScratch.Count == 0)
                 return transform.position;
 
-            var chosen = best[best.Count - 1];
+            var chosen = _bestScratch[_bestScratch.Count - 1];
             mostOptimalDistance = Mathf.Sqrt(chosen.distSqr);
             return chosen.t.position;
         }
@@ -1664,16 +1703,26 @@ namespace LethalGargoyles.src.Enemy
             if (!agent.CalculatePath(targetPos, path1))
                 return true;
 
-            if (path1 == null || path1.corners.Length == 0)
+            // HOIST THE CORNERS. NavMeshPath.corners is a PROPERTY backed by
+            // CalculateCornersInternal() - every single read allocates a brand new Vector3[].
+            // This method used to read it 2-3 times per loop iteration across up to 12 corners
+            // plus 4 more before the loop, and ChooseClosestNodeToPos calls this once per AI
+            // node - so one hide evaluation on a ~150-node interior was throwing away thousands
+            // of arrays per frame. One read, one array.
+            if (path1 == null)
+                return true;
+
+            Vector3[] corners = path1.corners;
+            if (corners.Length == 0)
                 return true;
 
             const int MAX_CORNERS_TO_SCAN = 12;
-            int cornerCount = Mathf.Min(path1.corners.Length, MAX_CORNERS_TO_SCAN);
+            int cornerCount = Mathf.Min(corners.Length, MAX_CORNERS_TO_SCAN);
 
-            if (path1.corners.Length <= 6)
+            if (corners.Length <= 6)
             {
                 Vector3 navTarget = RoundManager.Instance.GetNavMeshPosition(targetPos, RoundManager.Instance.navHit, 2.7f);
-                if ((path1.corners[^1] - navTarget).sqrMagnitude > 2.25f)
+                if ((corners[^1] - navTarget).sqrMagnitude > 2.25f)
                     return true;
             }
 
@@ -1683,11 +1732,11 @@ namespace LethalGargoyles.src.Enemy
             {
                 for (int j = 1; j < cornerCount; j++)
                 {
-                    pathDistance += Vector3.Distance(path1.corners[j - 1], path1.corners[j]);
+                    pathDistance += Vector3.Distance(corners[j - 1], corners[j]);
 
                     if (j <= 15 && (avoidLineOfSight || checkLOSToTargetPlayer))
                     {
-                        if (!flag && j > 8 && (path1.corners[j - 1] - path1.corners[j]).sqrMagnitude < 4f)
+                        if (!flag && j > 8 && (corners[j - 1] - corners[j]).sqrMagnitude < 4f)
                         {
                             flag = true;
                             j++;
@@ -1697,13 +1746,13 @@ namespace LethalGargoyles.src.Enemy
                         flag = false;
 
                         if (checkLOSToTargetPlayer && targetPlayer != null &&
-                            !Physics.Linecast(path1.corners[j - 1], cachedTargetPosition + Vector3.up * 0.3f,
+                            !Physics.Linecast(corners[j - 1], cachedTargetPosition + Vector3.up * 0.3f,
                                              StartOfRound.Instance.collidersAndRoomMaskAndDefault, QueryTriggerInteraction.Ignore))
                         {
                             return true;
                         }
 
-                        if (avoidLineOfSight && Physics.Linecast(path1.corners[j - 1], path1.corners[j], 262144))
+                        if (avoidLineOfSight && Physics.Linecast(corners[j - 1], corners[j], 262144))
                         {
                             return true;
                         }
@@ -1714,21 +1763,21 @@ namespace LethalGargoyles.src.Enemy
             {
                 for (int k = 1; k < cornerCount; k++)
                 {
-                    if (!flag && k > 8 && (path1.corners[k - 1] - path1.corners[k]).sqrMagnitude < 4f)
+                    if (!flag && k > 8 && (corners[k - 1] - corners[k]).sqrMagnitude < 4f)
                     {
                         flag = true;
                         continue;
                     }
 
                     if (targetPlayer != null && checkLOSToTargetPlayer &&
-                        !Physics.Linecast(Vector3.Lerp(path1.corners[k - 1], path1.corners[k], 0.5f) + Vector3.up * 0.25f,
+                        !Physics.Linecast(Vector3.Lerp(corners[k - 1], corners[k], 0.5f) + Vector3.up * 0.25f,
                                          cachedTargetPosition + Vector3.up * 0.25f,
                                          StartOfRound.Instance.collidersAndRoomMaskAndDefault, QueryTriggerInteraction.Ignore))
                     {
                         return true;
                     }
 
-                    if (Physics.Linecast(path1.corners[k - 1], path1.corners[k], 262144))
+                    if (Physics.Linecast(corners[k - 1], corners[k], 262144))
                     {
                         return true;
                     }
@@ -2204,11 +2253,17 @@ namespace LethalGargoyles.src.Enemy
             return true;
         }
 
+        /// <summary>
+        /// Convenience overload. Uses a REUSED NavMeshPath - it used to allocate a fresh one per
+        /// call, and FindCoverPointsAroundTarget calls this up to 120 times per cover rebuild.
+        /// NavMeshPath wraps native memory, so that was 120 allocate-and-finalize cycles.
+        /// </summary>
         private bool CheckForPath(Vector3 sourcePosition, Vector3 targetPosition)
         {
-            NavMeshPath path = new();
-            return CheckForPath(sourcePosition, targetPosition, path);
+            _scratchPath ??= new NavMeshPath();
+            return CheckForPath(sourcePosition, targetPosition, _scratchPath);
         }
+        private NavMeshPath? _scratchPath;
 
         // ============================================================
         // 10) Perception + environment helpers
