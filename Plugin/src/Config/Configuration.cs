@@ -123,14 +123,22 @@ namespace LethalGargoyles.src.Config
                                  "Let the Gargoyle call and ride the mineshaft elevator, so it can change floors on mineshaft interiors instead of being stuck on the one it spawned on.\n" +
                                  "OFF by default for the same reason as the setting above - it is untested behaviour, not a tuning knob.");
 
-        // Live-tunable so the corner-jam theory can be tested WITHOUT a Unity rebuild - NavMeshAgent
-        // .radius is writable at runtime, unlike the prefab value it comes from. Default 1.25 is
-        // exactly what the prefab already ships, so leaving this alone changes nothing.
+        // Live-tunable WITHOUT a Unity rebuild - NavMeshAgent.radius is writable at runtime, unlike
+        // the prefab value it is initialised from.
+        //
+        // THE DEFAULT NO LONGER MATCHES THE PREFAB, AND THAT IS DELIBERATE. The prefab ships 1.25
+        // (LethalGargoyleObj.prefab, m_Radius) and this overrides it on every spawn. 1.25 is what
+        // jammed him walking on the spot at corners and doorways and stopped him passing railings.
+        // Measured 2026-08-16 at 0.5: 432 of 432 AI dumps across six simultaneous Gargoyles
+        // reported a complete path, with no partial or invalid results.
+        //
+        // Both this comment and the description below said 1.25 for a while after the default
+        // moved, which is how the changelog ended up quoting the wrong number to players.
         public ConfigEntry<float> agentRadius = cfg.Bind("Pathfinding",
                                  "Agent Radius",
                                  0.5f,
                                  "How much room the Gargoyle's steering thinks it needs. This does NOT change where it is allowed to walk - the level's navigation data is fixed - it changes how far it tries to stay from walls and from other Gargoyles.\n" +
-                                 "0.5 is the shipped value and is small; most vanilla enemies are nearer 0.5. If the Gargoyle jams walking-on-the-spot at corners or doorways, or refuses to pass railings, try 0.5 and compare.");
+                                 "0.5 is the default. His model is built at 1.25, and this overrides it, which is what stopped him jamming on the spot at corners and doorways and refusing to squeeze past railings. Raise it toward 1.25 if you would rather he kept more distance from walls and from the other Gargoyles.");
 
         // --- Diagnostics -----------------------------------------------------------------
         // Runtime-gated logging. Live in RELEASE on purpose: a player chasing a bug can turn one
