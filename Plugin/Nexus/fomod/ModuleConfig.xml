@@ -12,8 +12,36 @@
   never installs a mod manager just drags the root `BepInEx` folder into the game folder.
   That is why the plugin tree sits at the root instead of under a `Core\` folder.
 -->
+<!--
+  THE SCHEMA URL BELOW IS A MAGIC STRING. COPY IT EXACTLY - CASING INCLUDED.
+
+  It is never fetched (that host has been dead for years). It is how Vortex decides WHICH
+  schema version to validate against, and it does not parse the attribute as XML - it runs a
+  raw text regex over the whole file, hunting for the schema-location attribute followed by
+  either "XmlScript" or "ModConfig" and then the version. That regex is built with
+  RegexOptions.Singleline and nothing else, so it is case SENSITIVE, and on no match the
+  version silently defaults to "1.0". Three ways to break it, all silent:
+    * lowercase "modconfig"          - what shipped in b28, and what broke a real install
+    * a prefix other than "xsi:"     - the regex matches literal text, not a namespace
+    * spaces around the "="          - same reason
+
+  Any of those validates this file against XmlScript1.0.xsd, a schema from before moduleImage
+  and installSteps existed. Vortex then reports a content-model error on line 20 and says
+  NOTHING about versions, which is what makes it expensive to diagnose.
+
+  The exact regex is NOT reproduced here on purpose. Vortex takes the FIRST match in the
+  file, so spelling the attribute name out a second time anywhere above the config element
+  creates a decoy that can capture the match and yield a garbage version. b31 did exactly
+  that and missed matching its own comment by a single character. pack-nexus.ps1 now fails
+  the pack if that attribute appears more than once. Read the regex in the source instead:
+  Nexus-Mods/fomod-installer, XmlScriptType.cs, field RegexVersion.
+
+  This exact string is the one Vortex's own reference FOMOD ships. pack-nexus.ps1 re-runs the
+  regex above on every pack, so a regression fails the build instead of a player's install.
+  Verified against Nexus-Mods/fomod-installer XmlScriptType.cs, 2026-08-16.
+-->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:noNamespaceSchemaLocation="http://qconsulting.ca/gcd/modconfig5.0.xsd">
+        xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
 
   <moduleName>Lethal Gargoyles</moduleName>
 
@@ -25,6 +53,61 @@
   </requiredInstallFiles>
 
   <installSteps order="Explicit">
+
+    <!--
+      A read-only notice page, not a choice. It installs nothing - the group is SelectAll with
+      a single Required entry, so the box is ticked and disabled and the panel just shows text.
+
+      This page exists because NONE of this mod's three required libraries is on Nexus, and
+      Vortex does not read a mod page's Requirements tab (Nexus-Mods/Vortex issue 16360 -
+      dependency rules are manual or come from a Collection). So there is no automated path
+      that tells a Nexus user what to install. Missing any of them, the plugin is refused at
+      load with a bare "missing dependencies" line in the BepInEx log, which reads like the
+      mod is broken - and that line names only LethalLib and PathfindingLib, because they are
+      the only two declared as [BepInDependency]. It will never mention Concentus, nor
+      anything further down LethalLib's own dependency chain. This installer page is the ONE place inside Vortex where a
+      warning is guaranteed to be in front of the player before they hit the problem.
+    -->
+    <installStep name="Requirements - please read">
+      <optionalFileGroups order="Explicit">
+        <group name="Lethal Gargoyles will NOT load without these" type="SelectAll">
+          <plugins order="Explicit">
+            <plugin name="Four required mods - none of the libraries is on Nexus">
+              <description>Lethal Gargoyles needs four other mods. If any is missing the game still starts, the Gargoyle simply will not be there, and your BepInEx log will say "missing dependencies".
+
+  1. BepInEx 5 (5.4.2100)
+  2. LethalLib, by Evaisa
+  3. PathfindingLib, by Zaggy1024
+  4. Concentus, by qwbarch
+
+IMPORTANT: none of those three is on Nexus, and LethalLib needs three more packages of its own - HookGenPatcher (you may see it called MMHOOK), MonoDetour, and MonoDetour_BepInEx_5. That is six you have to download from Thunderstore and copy in by hand - Vortex cannot do it for you. BepInEx itself is the exception: Vortex installs that one automatically.
+
+  https://thunderstore.io/c/lethal-company/p/Evaisa/LethalLib/
+  https://thunderstore.io/c/lethal-company/p/Zaggy1024/PathfindingLib/
+  https://thunderstore.io/c/lethal-company/p/qwbarch/Concentus/
+  https://thunderstore.io/c/lethal-company/p/Evaisa/HookGenPatcher/
+  https://thunderstore.io/c/lethal-company/p/MonoDetour/MonoDetour/
+  https://thunderstore.io/c/lethal-company/p/MonoDetour/MonoDetour_BepInEx_5/
+
+THEY DO NOT ALL GO IN THE SAME FOLDER, so do not just tip them into plugins. The step by step is on the mod page, and in the "READ ME FIRST - Manual Install" file inside this download. The short version: LethalLib's "plugins" folder, HookGenPatcher's "patchers" and "config", and MonoDetour's "core" and "patchers" all go inside your BepInEx folder, while PathfindingLib.dll and Concentus go into BepInEx\plugins.
+
+You can finish this installer first and add them afterwards - order does not matter, only that everything is present before you play.
+
+OPTIONAL, for extra content rather than to make the mod work:
+
+  Coroner - the Gargoyle gets his own cause-of-death messages, and taunts you about how you
+            died last round. Tick the box on the next page if you use it.
+
+Finally: this is a host AND client mod. Everyone in the lobby needs it installed, or the Gargoyle will not spawn correctly.</description>
+              <typeDescriptor>
+                <type name="Required" />
+              </typeDescriptor>
+            </plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+
     <installStep name="Optional Extras">
       <optionalFileGroups order="Explicit">
         <group name="Other Mod Compatibility" type="SelectAny">

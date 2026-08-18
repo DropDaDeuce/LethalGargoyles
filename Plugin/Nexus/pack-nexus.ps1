@@ -59,9 +59,10 @@ $srcChanges  = Join-Path $RepoRoot 'CHANGELOG.md'
 $srcManual   = Join-Path $nexusDir 'MANUAL-INSTALL.txt'
 $srcInfo     = Join-Path $nexusDir 'fomod\info.xml'
 $srcModCfg   = Join-Path $nexusDir 'fomod\ModuleConfig.xml'
+$srcSchema   = Join-Path $nexusDir 'schema\XmlScript5.0.xsd'
 
 $required = @($srcDll, $srcNVorbis, $srcNVorbXml, $srcBundle, $srcVoice, $srcCoroner,
-              $srcIcon, $srcChanges, $srcManual, $srcInfo, $srcModCfg)
+              $srcIcon, $srcChanges, $srcManual, $srcInfo, $srcModCfg, $srcSchema)
 $missing = $required | Where-Object { -not (Test-Path -LiteralPath $_) }
 if ($missing) {
     throw "pack-nexus: missing input(s):`n  " + ($missing -join "`n  ")
@@ -106,6 +107,53 @@ Copy-Item -LiteralPath $srcIcon   -Destination (Join-Path $fomodDir 'icon.png')
 # --- archive root : what a player sees first when they open the zip -----------------------
 Copy-Item -LiteralPath $srcChanges -Destination $stage
 Copy-Item -LiteralPath $srcManual  -Destination (Join-Path $stage 'READ ME FIRST - Manual Install.txt')
+
+# --- FOMOD validation : both halves of what Vortex actually does --------------------------
+# b28 shipped a FOMOD that Vortex rejected, and NEITHER of these checks alone would have
+# caught it. Schema validation passed, because pointing a validator at the 5.0 schema
+# bypasses the version detection that was the actual bug. So run the detection too.
+$stagedModCfg = Join-Path $fomodDir 'ModuleConfig.xml'
+$modCfgText   = Get-Content -LiteralPath $stagedModCfg -Raw
+
+# 1. Version detection, byte-for-byte the regex from Nexus-Mods/fomod-installer
+#    (XmlScriptType.cs, RegexVersion). Singleline only - deliberately NOT IgnoreCase, because
+#    the real one is not either, and a check more lenient than the tool it models is useless.
+$rxVersion = New-Object System.Text.RegularExpressions.Regex(
+    'xsi:noNamespaceSchemaLocation="[^"]*((XmlScript)|(ModConfig))(.*?).xsd',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline)
+# Vortex takes the FIRST match in the file, so a second mention of the attribute name - in a
+# comment, say - is a decoy that can capture the match and hand back a garbage version. b31's
+# own warning comment quoted the regex verbatim and missed doing this by one character.
+$attrCount = ([regex]::Matches($modCfgText, [regex]::Escape('noNamespaceSchemaLocation='))).Count
+if ($attrCount -ne 1) {
+    throw "pack-nexus: fomod\ModuleConfig.xml mentions noNamespaceSchemaLocation $attrCount times, expected exactly 1. Vortex matches the FIRST occurrence in raw text, so any extra mention - even inside a comment - can hijack version detection. Remove it."
+}
+
+$m = $rxVersion.Match($modCfgText)
+$detected = if ($m.Success -and $m.Groups[4].Value) { $m.Groups[4].Value } else { '1.0' }
+if ($detected -ne '5.0') {
+    throw "pack-nexus: Vortex would read this FOMOD as XmlScript $detected, not 5.0. The xsi:noNamespaceSchemaLocation string in fomod\ModuleConfig.xml is wrong - check the casing of 'ModConfig', the 'xsi:' prefix, and that there is no whitespace around the '='. At 1.0 the schema predates moduleImage and installSteps, and Vortex rejects the installer with a misleading line number."
+}
+
+# 2. Schema validation against the version detection just resolved to.
+$vset = New-Object System.Xml.XmlReaderSettings
+$vset.ValidationType = [System.Xml.ValidationType]::Schema
+$null = $vset.Schemas.Add($null, $srcSchema)
+$vErrors = New-Object System.Collections.ArrayList
+$vset.add_ValidationEventHandler([System.Xml.Schema.ValidationEventHandler] {
+    param($s, $e)
+    if ($e.Severity -eq [System.Xml.Schema.XmlSeverityType]::Error) {
+        [void]$vErrors.Add("Line $($e.Exception.LineNumber), Pos $($e.Exception.LinePosition): $($e.Message)")
+    }
+})
+$vr = [System.Xml.XmlReader]::Create($stagedModCfg, $vset)
+try { while ($vr.Read()) { } }
+catch { [void]$vErrors.Add("fatal: $($_.Exception.Message)") }
+finally { $vr.Close() }
+if ($vErrors.Count -gt 0) {
+    throw "pack-nexus: fomod\ModuleConfig.xml fails XmlScript 5.0 validation:`n  " + ($vErrors -join "`n  ")
+}
+Write-Host "pack-nexus: fomod validates as XmlScript $detected"
 
 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }

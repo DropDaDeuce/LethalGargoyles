@@ -1,19 +1,98 @@
-LETHAL GARGOYLES - MANUAL INSTALL
-=================================
+LETHAL GARGOYLES - INSTALLING THE MODS IT NEEDS
+===============================================
 
-If you used Vortex or Mod Organizer 2, you can close this file. The installer already did
-everything below.
+Read this even if you used Vortex. Vortex installed Lethal Gargoyles and it will handle
+BepInEx for you, but it CANNOT install the other six mods this one depends on - none of them
+is hosted on Nexus, so you have to fetch those from Thunderstore and copy them in by hand.
+
+If any one of them is missing, the game still starts, the Gargoyle simply never appears, and
+your BepInEx log says "missing dependencies".
 
 
-WHAT YOU NEED FIRST
--------------------
+STEP 1 - DOWNLOAD THESE SEVEN
+-----------------------------
 
-Lethal Gargoyles will not load on its own. Install these first, from Nexus or from
-Thunderstore, whichever you already use:
+Use the "Manual Download" button on each Thunderstore page.
 
-  * BepInEx 5 (5.4.2100)
-  * LethalLib     by Evaisa
-  * PathfindingLib by Zaggy1024
+  BepInEx 5      SKIP THIS ONE IF YOU USED VORTEX - it installs BepInEx for you
+      https://thunderstore.io/c/lethal-company/p/BepInEx/BepInExPack/
+      (also on Nexus, if you prefer)
+  LethalLib            by Evaisa
+      https://thunderstore.io/c/lethal-company/p/Evaisa/LethalLib/
+  PathfindingLib       by Zaggy1024
+      https://thunderstore.io/c/lethal-company/p/Zaggy1024/PathfindingLib/
+  Concentus            by qwbarch
+      https://thunderstore.io/c/lethal-company/p/qwbarch/Concentus/
+  HookGenPatcher       by Evaisa    (needed by LethalLib, often called MMHOOK)
+      https://thunderstore.io/c/lethal-company/p/Evaisa/HookGenPatcher/
+  MonoDetour                        (needed by LethalLib)
+      https://thunderstore.io/c/lethal-company/p/MonoDetour/MonoDetour/
+  MonoDetour_BepInEx_5              (needed by LethalLib)
+      https://thunderstore.io/c/lethal-company/p/MonoDetour/MonoDetour_BepInEx_5/
+
+
+STEP 2 - BEPINEX GOES IN FIRST  (skip if you used Vortex)
+---------------------------------------------------------
+
+Open the BepInEx zip, go into the "BepInExPack" folder inside it, and copy everything from in
+there into your Lethal Company folder - the one with "Lethal Company.exe" in it, usually
+
+    C:\Program Files (x86)\Steam\steamapps\common\Lethal Company
+
+When it is right you will have a "BepInEx" folder and a "winhttp.dll" file next to the exe.
+
+
+STEP 3 - THEN THE OTHER SIX
+---------------------------
+
+THEY DO NOT ALL GO IN THE SAME PLACE. Copy the folders named below, let Windows merge them,
+and do not rename anything.
+
+  LethalLib             copy the "plugins" folder from the zip into your BepInEx folder
+  HookGenPatcher        copy the "patchers" and "config" folders into your BepInEx folder
+  MonoDetour            copy the "core" folder into your BepInEx folder
+  MonoDetour_BepInEx_5  copy the "core" and "patchers" folders into your BepInEx folder
+  PathfindingLib        put PathfindingLib.dll into BepInEx\plugins
+  Concentus             make a BepInEx\plugins\Concentus folder and copy everything from the
+                        zip into it, except README.md, icon.png and manifest.json
+
+
+STEP 4 - INSTALL LETHAL GARGOYLES
+---------------------------------
+
+If Vortex already installed it, you are done - skip to step 5. (The installer should work in
+Mod Organizer 2 too, but I do not use MO2 and have not tested it.)
+
+By hand: drag the "BepInEx" folder from this zip into your Lethal Company folder and let it
+merge. If you also run Coroner, drag the "BepInEx" folder out of "Optional\Coroner" as well.
+
+
+STEP 5 - START THE GAME ONCE
+----------------------------
+
+Launch it, then quit. That is what writes the mod's settings to
+BepInEx\config\DropDaDeuce.LethalGargoyles.cfg and creates a folder for your own voice lines
+at "Lethal Gargoyles\Custom Voice Lines" in the game directory.
+
+
+PREFER A MOD MANAGER?
+---------------------
+
+r2modman and Gale are Thunderstore mod managers that install the whole chain in one click.
+They keep mods in their own profile folder rather than in your game folder, so do not mix one
+with a Vortex install. If you would rather go that way, use the Thunderstore release of
+Lethal Gargoyles instead of this one:
+
+    https://thunderstore.io/package/DropDaDeuce/LethalGargoyles/
+
+
+OPTIONAL - adds content, not needed for the mod to work:
+
+  * Coroner  - the Gargoyle gets his own cause-of-death messages, and taunts you about how
+               you died last round. This is what the "Coroner death messages" tick box in
+               the installer is for.
+
+You do NOT need to install NVorbis. It ships inside this mod, in lib\NVorbis.
 
 If BepInEx is installed correctly you will have a "BepInEx" folder and a "winhttp.dll" file
 sitting next to "Lethal Company.exe".

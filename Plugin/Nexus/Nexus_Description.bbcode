@@ -5,6 +5,63 @@
 
 [line]
 
+[size=5][b]READ THIS FIRST - Installation[/b][/size]
+
+[b]Lethal Gargoyles needs seven other mods, and six of them are not on Nexus.[/b] Vortex handles BepInEx for you. The other six you will have to download from Thunderstore and copy in yourself - Vortex cannot fetch them and it will not warn you they are missing. If even one is absent the game still starts, the Gargoyle simply never appears, and your BepInEx log says "missing dependencies".
+
+It is not hard, but [b]the pieces do not all go in the same folder[/b], so please follow the steps rather than dropping everything into [b]plugins[/b].
+
+[size=4][b]Step 1 - download these seven[/b][/size]
+
+[list]
+[*][b]BepInEx 5[/b] - [b]skip this one if you are installing with Vortex[/b], it downloads BepInEx for you. Installing by hand? Get it from [url=https://thunderstore.io/c/lethal-company/p/BepInEx/BepInExPack/]Thunderstore[/url], or from Nexus if you prefer.
+[*][b]LethalLib[/b] by Evaisa - [url=https://thunderstore.io/c/lethal-company/p/Evaisa/LethalLib/]Thunderstore[/url]
+[*][b]PathfindingLib[/b] by Zaggy1024 - [url=https://thunderstore.io/c/lethal-company/p/Zaggy1024/PathfindingLib/]Thunderstore[/url]
+[*][b]Concentus[/b] by qwbarch - [url=https://thunderstore.io/c/lethal-company/p/qwbarch/Concentus/]Thunderstore[/url]
+[*][b]HookGenPatcher[/b] by Evaisa - [url=https://thunderstore.io/c/lethal-company/p/Evaisa/HookGenPatcher/]Thunderstore[/url] - needed by LethalLib. You may see this one called MMHOOK.
+[*][b]MonoDetour[/b] - [url=https://thunderstore.io/c/lethal-company/p/MonoDetour/MonoDetour/]Thunderstore[/url] - needed by LethalLib.
+[*][b]MonoDetour_BepInEx_5[/b] - [url=https://thunderstore.io/c/lethal-company/p/MonoDetour/MonoDetour_BepInEx_5/]Thunderstore[/url] - needed by LethalLib.
+[/list]
+
+On each Thunderstore page, use the [b]Manual Download[/b] button to get the zip.
+
+[size=4][b]Step 2 - BepInEx goes in first[/b][/size]
+
+[i]Vortex users can skip this step.[/i] Open the BepInEx zip, go into the [b]BepInExPack[/b] folder inside it, and copy everything from in there into your Lethal Company folder - the one with [b]Lethal Company.exe[/b] in it. When it is right, you will have a [b]BepInEx[/b] folder and a [b]winhttp.dll[/b] file sitting next to the exe.
+
+[size=4][b]Step 3 - then the other six[/b][/size]
+
+Each of these lands somewhere slightly different. Copy, let Windows merge the folders, and do not rename anything.
+
+[list]
+[*][b]LethalLib[/b] - copy the [b]plugins[/b] folder from the zip into your [b]BepInEx[/b] folder.
+[*][b]HookGenPatcher[/b] - copy the [b]patchers[/b] and [b]config[/b] folders into your [b]BepInEx[/b] folder.
+[*][b]MonoDetour[/b] - copy the [b]core[/b] folder into your [b]BepInEx[/b] folder.
+[*][b]MonoDetour_BepInEx_5[/b] - copy the [b]core[/b] and [b]patchers[/b] folders into your [b]BepInEx[/b] folder.
+[*][b]PathfindingLib[/b] - put [b]PathfindingLib.dll[/b] into [b]BepInEx\plugins[/b].
+[*][b]Concentus[/b] - make a folder called [b]Concentus[/b] inside [b]BepInEx\plugins[/b], then copy everything from the zip into it except README.md, icon.png and manifest.json.
+[/list]
+
+[size=4][b]Step 4 - install Lethal Gargoyles[/b][/size]
+
+[b]With Vortex[/b] - hit the Mod Manager Download button above and follow the installer. It will ask whether you want the Coroner compatibility file. Leave it ticked unless you have a reason not to. [i]The installer should work in Mod Organizer 2 as well, but I do not use MO2 and have not tested it - if you try it, let me know how it goes.[/i]
+
+[b]By hand[/b] - open this mod's zip and drag the [b]BepInEx[/b] folder into your Lethal Company folder. If you also run Coroner, drag the [b]BepInEx[/b] folder out of [b]Optional\Coroner[/b] as well.
+
+Then start the game once and quit. That is what writes the config file and creates the folder for your own custom voice lines.
+
+[size=4][b]Optional extras[/b][/size]
+
+Not needed for the mod to work, it just adds content: [b]Coroner[/b] - the Gargoyle gets his own cause-of-death messages, and taunts you about how you died last round.
+
+[size=4][b]Would you rather not do any of that?[/b][/size]
+
+[b]r2modman[/b] and [b]Gale[/b] are Thunderstore mod managers that install the whole chain in one click. They keep mods in their own profile folder rather than in your game folder, though, so do not mix one with a Vortex install. If you would rather go that route, grab the [url=https://thunderstore.io/package/DropDaDeuce/LethalGargoyles/]Thunderstore release of Lethal Gargoyles[/url] instead of this one.
+
+[b]Finally: this is a host and client mod. Everyone in the lobby needs it installed[/b], or the Gargoyle will not spawn correctly.
+
+[line]
+
 [size=5][b]Mod Showcase[/b][/size]
 
 [youtube]BGAoOVgEUk0[/youtube]
@@ -28,28 +85,6 @@
 [*]If the player enters its aggro range, it will chase and attack them. Be careful, as it might occasionally push you into walls.
 [*]If the target player is walking on a catwalk, the gargoyle will try to push the player, potentially off the catwalk.
 [/list][/spoiler]
-
-[line]
-
-[size=5][b]Requirements[/b][/size]
-
-[list]
-[*][b]BepInEx 5[/b] (5.4.2100)
-[*][b]LethalLib[/b] by Evaisa
-[*][b]PathfindingLib[/b] by Zaggy1024
-[/list]
-
-[b]This is a host and client mod. Everyone in the lobby needs it installed[/b], or the Gargoyle will not spawn correctly.
-
-[line]
-
-[size=5][b]Installation[/b][/size]
-
-[b]With Vortex or Mod Organizer 2[/b] - hit the Mod Manager Download button and follow the installer. It will ask whether you want the Coroner compatibility file. Leave it ticked unless you have a reason not to.
-
-[b]By hand[/b] - open the zip and drag the [b]BepInEx[/b] folder into your Lethal Company folder, the one with [b]Lethal Company.exe[/b] in it. If you also run Coroner, drag the [b]BepInEx[/b] folder out of [b]Optional\Coroner[/b] as well. There is a READ ME FIRST text file in the zip with the same steps.
-
-Start the game once after installing. That is what writes the config file and creates your Custom Voice Lines folders.
 
 [line]
 
@@ -77,7 +112,6 @@ Start the game once after installing. That is what writes the config file and cr
 [*]Taunt - General
 [*]Taunt - Player Death
 [*]Taunt - Prior Death
-[*]Taunt - EmployeeClass (requires the Employee Classes mod)
 [*]Taunt - SteamIDs
 [/list]
 
@@ -257,13 +291,6 @@ Any individual line, shipped or custom, can be switched off in the mod's config 
 "That last death sure was stunning!"
 "Thought ye were safe on that catwalk? Not with him around! Hahahaha"[/spoiler]
 
-[spoiler][b]Employee Classes[/b] - if you have the Employee Classes mod
-"A Scout? More like a... lout! Probably trip over yer own feet tryin' to escape!"
-"Go on, then, Brute! Hit me! I could use a massage... if ye can even reach me!"
-"So ye think yer a smart researcher, eh? I've seen smarter rocks! And they're less squishy!"
-"Go on, then, Maintenance! Try to repair yerself... after I'm done with ye!"
-"Just a regular Employee, eh? Nothin' special... just like yer face! Hahahaha!"[/spoiler]
-
 [spoiler][b]Activity[/b] - taunts the target based on what they have been doing
 "You think that's a key to the facility!? That's a key to your death! Hahahaha!"
 "Can't find yer way out, can ye? Don't worry, I'll be here to watch ye die! Hahahaha!"
@@ -295,9 +322,7 @@ Any individual line, shipped or custom, can be switched off in the mod's config 
 [size=5][b]Compatibility[/b][/size]
 
 [list]
-[*][b]Enhanced Monsters[/b] - sets sensible default values for Enhanced Monsters.
 [*][b]Coroner[/b] - specific voice lines for Coroner causes of death, plus a custom cause of death message for the Gargoyle himself. The installer offers this as a tick box.
-[*][b]Employee Classes[/b] - adds a taunt for each class.
 [/list]
 
 [line]
@@ -307,8 +332,8 @@ Any individual line, shipped or custom, can be switched off in the mod's config 
 Voice line suggestions are genuinely welcome, plenty of the lines above came from players.
 
 [list]
+[*][b]Right here[/b] - post in the [b]Posts[/b] tab on this page and I will see it.
 [*][b]GitHub:[/b] [url=https://github.com/DropDaDeuce/LethalGargoyles]github.com/DropDaDeuce/LethalGargoyles[/url]
-[*][b]Lethal Company Modding Discord[/b]
 [/list]
 
 This is my first experience with Unity, C#, modeling and animation. Any suggestions for improvement are welcome.

@@ -30,7 +30,7 @@ This mischievous gargoyle's goal is to follow you around and annoy you with his 
 Any feedback or voice line requests can be submitted through the following channels:
 
 * **GitHub Repo:** https://github.com/DropDaDeuce/LethalGargoyles
-* **Lethal Company Modding Discord:** https://discord.com/channels/1168655651455639582/1312527029455032394
+* **Nexus Mods page:** https://www.nexusmods.com/lethalcompany/mods/309 - you can reach me in the Posts tab there.
 
 This is my first experience with Unity, C#, models, and animations. Any suggestions for improvement are welcome!
 
@@ -57,7 +57,6 @@ Voice lines are organized into the following categories:
 - Taunt - General
 - Taunt - Player Death
 - Taunt - Prior Death
-- Taunt - EmployeeClass (Requires the Employee Classes mod)
 - Taunt - SteamIDs
 
 **3.  Naming Conventions**
@@ -89,7 +88,6 @@ The gargoyle's taunts are categorized as follows:
 * Enemy Proximity
 * Prior Death Vanilla
 * Prior Death Coroner
-* Employee Classes
 * Activity
 * SteamIDs
 
@@ -261,15 +259,6 @@ The gargoyle's taunts are categorized as follows:
 </details>
 
 <details>
-<summary>Employee Classes (If you have the EmployeeClasses mod)</summary>
-<pre>"A Scout? More like a... lout! Probably trip over yer own feet tryin' to escape!"</pre>
-<pre>"Go on, then, Brute! Hit me! I could use a massage... if ye can even reach me!"</pre>
-<pre>"So ye think yer a smart researcher, eh? I've seen smarter rocks! And they're less squishy!"</pre>
-<pre>"Go on, then, Maintenance! Try to repair yerself... after I'm done with ye!"</pre>
-<pre>"Just a regular Employee, eh? Nothin' special... just like yer face! Hahahaha!"</pre>
-</details>
-
-<details>
 <summary>Activity (Taunts the target based on several hardcoded actions)</summary>
 <pre>"You think that's a key to the facility!? That's a key to your death! Hahahaha!"</pre>
 <pre>"Can't find yer way out, can ye? Don't worry, I'll be here to watch ye die! Hahahaha!"</pre>
@@ -300,16 +289,11 @@ The gargoyle's taunts are categorized as follows:
 </details>
 
 ## Compatibility
-- Enhanced Monsters
-    - Sets default values for Enhanced Monsters
 - Coroner
     - Specific voice lines for coroner cause of death
     - Adds custom cause of death message for gargoyle
-- Employee Classes
-    - Adds taunts for each class.
 
 ## To Do
-- 1 more taunt for each employee class.
 - A mechanic for the Gargoyle to steal items, with a config option to turn it off.
 - Gargoyle scrap that taunts, quieter than the monster itself.
 - An activity taunt for playing a boombox near the Gargoyle.
