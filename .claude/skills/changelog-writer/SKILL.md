@@ -1,85 +1,132 @@
 ---
 name: changelog-writer
-description: Use ANY time a line is going into CHANGELOG.md - after finishing a batch that changes player-visible behaviour, adding a new config setting, fixing a bug, or writing up a release. Also use when asked to rewrite, tidy or re-voice an existing changelog entry. Carries the house voice (dev intern explaining the change to a casual player, technical detail kept but placed second) and the punctuation rules that keep it from reading like AI output.
+description: Use ANY time a line is going into CHANGELOG.md - after finishing a batch that changes player-visible behaviour, adding a new config setting, fixing a bug, or writing up a release. Also use when asked to rewrite, tidy, shorten or re-voice an existing changelog entry. Carries the house voice, which is TERSE - one past-tense sentence per bullet, around nine words, no explanation of the mechanism - plus the punctuation rules that keep it from reading like AI output.
 ---
 
 # Writing the changelog
 
-`CHANGELOG.md` is read by players in a mod manager, mid-scroll, deciding whether to hit update. Most of them do not code. Some of them do, and those are the ones who file the useful bug reports, so the detail stays in. Both audiences get served by the same bullet: **plain sentence first, the technical reason second.**
+`CHANGELOG.md` is a mod-manager release note. A player reads it mid-scroll, deciding whether to hit update. **They are skimming a list, not reading an article.**
 
-This is not a commit log and it is not marketing. Write it the way a dev intern would explain their week to the players: they know exactly what they changed, they are not showing off about it, and they are not hiding it either.
+Every release from v0.0.1 to v0.7.0 is written that way, and they are the house style. Measured against the file on 2026-08-17:
 
-## Where the entry goes
+|  | v0.0.1 to v0.7.0 (144 bullets) | v0.8.0 (35 bullets) |
+|---|---|---|
+| Median bullet | **9 words** | 53 words |
+| Longest bullet | 33 words | 138 words |
+| Median sentences | **1** | 3 |
 
-* **`## Unreleased` at the top of the file is the accumulator.** Add to it. Do not mint a new version heading - `ship-release` renames `Unreleased` when the version actually ships.
-* **Reuse an existing bold group header before inventing one.** The live set is `**AI Improvements:**`, `**Bug Fixes:**`, `**New Features:**`, `**Changes:**`, `**Tuning:**`, `**New Settings:**`, `**Config File Layout:**`, `**Game Compatibility:**`, `**Documentation:**`. A one-bullet section nobody has seen before is usually a bullet that belonged in an existing section.
-* **Not everything belongs here.** A refactor a player cannot observe, a doc fix, a board entry, a build-system change: none of those go in `CHANGELOG.md`. They go in `Docs\Archive\Done\Done_YYYY-MM.md`. The test is literal: **could a player notice this without reading the source?** If no, it is not a changelog line.
-* `CHANGELOG.md` is a single-writer shared doc under the board protocol. Claim it before editing it.
+**v0.8.0 is the outlier and it is not the target.** It reads like a post-mortem. Write to the left-hand column.
 
 ## The shape of a bullet
 
-1. **Sentence one says what the player will see, hear, or be able to do.** No jargon, no class names, no method names.
-2. **Sentence two (optional) says why it was happening.** This is where the technical reader gets paid. Keep it to the mechanism, not the fix's implementation.
-3. **Sentence three (optional) is the consequence they should expect.** "Expect it to feel more present." "Your existing config keeps the old value."
-
-Bold the whole first sentence only when the bullet is the headline of its section. Two or three bolded leads in a release is right; bolding every bullet means nothing is emphasised.
+**One past-tense sentence, verb first.** The verbs the file actually uses, most frequent first: `Added`, `Fixed`, `Updated`, `Optimized`, `Improved`, `Adjusted`, `Reduced`, `Implemented`, `Removed`.
 
 ```
-- **The Gargoyle actually roams again while it is searching for you.** Its search was
-  restarting itself every frame, which meant it never got far enough to pick somewhere
-  to go, so it tended to loiter near where it spawned. Expect it to feel considerably
-  more present.
+- Fixed the gargoyle's push doing nothing for anyone except the host.
+- Improved the gargoyle's navigation so it can reach players more reliably and gets stuck less often.
+- Reduced the default idle range from 30 to 20 to improve target following.
+- Added 21 new voice lines for activity-based taunts.
 ```
 
-That is the target: a player understands the first sentence, a modder understands the second, and nobody had to read code.
+**Hard limits:** one sentence, around 9 words, 25 at the absolute ceiling. A second short sentence only when the player has to **do** something (delete a config line, add a file, install a dependency). Never a third.
 
-## Punctuation and phrasing rules
+**What gets cut, every time:**
 
-These exist because the default register of a language model is instantly recognisable, and a changelog that reads like it was generated gets trusted less than one that reads like a person wrote it.
+* **The mechanism.** "Its search was restarting itself every frame" is a commit message. The player cannot see a frame. If a maintainer needs the cause it lives in `Docs\Archive\Done\` and in the commit.
+* **The feel forecast.** "Expect him to feel considerably more present." Let them find out.
+* **The reassurance.** "It is the intended behaviour finally working." "This will feel like a different mod."
+* **The measurement.** Frame budgets, route-solve counts, metres of ground covered. Say "Significantly improved performance", or give one number inside the sentence if it is a config value.
+* **Full-sentence bold.** Bold is for section headers and for the sub-topic labels below, nothing else. Bolding a whole lead sentence appears nowhere before v0.8.0.
 
-**Banned outright:**
+## Grouping
 
-* **Em dashes and en dashes as sentence punctuation.** Recast instead: split into two sentences, use a comma, or put the aside in parentheses. A hyphen inside a range or a compound word is fine.
-* **Curly quotes and curly apostrophes.** Straight only.
-* **Emoji**, decorative bullets, and arrows. The one arrow that is allowed is the config convention `Section > Setting Name`.
-* **The chiasmus.** "It's not a performance problem, it's a correctness problem." "Less a fix, more a rewrite." Say the one true thing.
-* **The rhetorical triad.** "Faster, quieter, and far less likely to get stuck." Pick the one that matters.
-* **LLM filler vocabulary:** seamlessly, robust, leverage, utilize, delve, comprehensive, streamlined, enhanced experience, under the hood as a section header, "it's worth noting", "importantly", "significantly improved" with nothing measured behind it.
+Bold group header, then the bullets. The canonical set, in the order they normally appear:
+
+```
+**New Features:**
+**Changes:**
+**Bug Fixes:**
+**Documentation:**
+**Notes:**
+```
+
+Add a one-off header only when a whole cluster genuinely does not fit one of those. The file has done it four times in thirteen releases: `**Dependency Changes:**`, `**Game Parity:**`, `**AI Improvements:**`, `**Icon**`. **v0.8.0 invented five in one release** (Performance, Tuning, New Settings, Config File Layout, Game Compatibility) and that is header sprawl, not organisation. New settings belong under `**New Features:**`, tuning belongs under `**Changes:**`.
+
+**Nest when a feature has several parts.** Bold sub-topic label, then 4-space-indented bullets:
+
+```
+**New Features:**
+
+- **Push Attack:**
+    - Added a new "PushTarget" attack pattern where the gargoyle attempts to push players off edges.
+    - Implemented a new cause of death in Coroner for deaths caused by gargoyle pushes.
+- **Configuration:**
+    - Added a config option to enable or disable the "PushTarget" attack.
+    - Nerfed default value for Aggro Range from 6 to 4.
+```
+
+Flat bullets with no nesting are also correct (v0.7.0). Match whichever the neighbouring sections use.
+
+## Voice
+
+* **Third person, past tense.** "the gargoyle", "the host", "players". Second person appears twice in the whole pre-0.8.0 file, both times for something the player physically does ("You can now add custom taunts by placing OGG files in..."). Use it for that and nothing else.
+* **Lowercase "gargoyle"** when it is the creature, which is how most of the file reads.
+* **Backticks are for code**, not for config paths in prose: `` `LethalGargoylesAI` ``, `` `PushTarget` ``, `` `Strings_en-us_gargoyle.xml` ``. Settings are named plainly: "Reduced the default idle range from 30 to 20."
+* **Say the number when a default moved.** "from 6 to 4", "from 30 to 20".
+* **`(default off)`** for a new setting that ships disabled. Say it in the bullet.
+* **Thank people by name.** "Thank you Purple for the Gargoyle render used in the icon!"
+
+## Where the entry goes
+
+* **`## Unreleased` at the top of the file is the accumulator.** Add to it. Do not mint a version heading - `ship-release` renames `Unreleased` when it ships. Released headings read `## v0.8.0 - The Wandering Gargoyle`.
+* **Not everything belongs here.** A refactor a player cannot observe, a doc fix, a board entry, a build-system change: those go in `Docs\Archive\Done\Done_YYYY-MM.md`. The test is literal: **could a player notice this without reading the source?**
+* `CHANGELOG.md` is a single-writer shared doc under the board protocol. Claim it before editing it.
+
+## The honesty items, and where they fit
+
+These still have to be said. They do **not** get to bloat the bullets. Put them in `**Notes:**` at the bottom of the release, one line each, which is what v0.6.1 already does.
+
+```
+**Notes:**
+
+- Not yet verified in a live round: the footstep volume fix and the freeze fixes.
+- Existing config files keep their old taunt timers. Delete Min Taunt and Max Taunt to pick up the new defaults.
+- Multiple gargoyles now spread across the crew instead of all chasing one player. This is intended.
+```
+
+* **Unverified in game.** Every session can build and none can play. If nobody has run it, say so.
+* **Existing configs do not pick up new defaults.** BepInEx keeps what is on disk.
+* **A change that will look like a bug.** Say it, or the first report will be "the update broke targeting".
+
+## Punctuation and phrasing bans
+
+The default register of a language model is instantly recognisable, and a changelog that reads generated gets trusted less than one that reads written. The pre-0.8.0 file contains **zero** em dashes, en dashes, curly quotes and curly apostrophes. Keep it that way.
+
+* **Em dashes and en dashes as sentence punctuation.** Split the sentence or use a comma. A hyphen inside a compound word or a range is fine.
+* **Curly quotes and apostrophes.** Straight only.
+* **Emoji, decorative bullets, arrows.**
+* **The chiasmus.** "Less a fix, more a rewrite."
+* **The rhetorical triad.** "Faster, quieter, and far less likely to get stuck."
+* **LLM filler:** seamlessly, robust, leverage, utilize, comprehensive, streamlined, enhanced experience, "it's worth noting", "importantly", "significantly improved" with nothing behind it.
 * **Announcing the writing.** "This update brings a number of improvements." Just list them.
+* **Semicolons.** At most one per release, and probably zero. A one-sentence bullet does not need one.
 
-**Use sparingly:**
+## Compressing an over-written bullet
 
-* **Semicolons.** At most one per bullet, and only when the two halves are genuinely one thought. Two semicolons in a bullet is a paragraph pretending to be a list item.
-* **Bold inside a sentence.** For a config path or a hard warning, not for emphasis-by-default.
+Strip it to the verb and the observable outcome. Real v0.8.0 lines, cut to house style:
 
-**Always:**
-
-* **Present tense for behaviour, past tense for the bug.** "The Gargoyle no longer gets stuck. It was asking for a route it never requested."
-* **Second person for the player.** "you", "your config", "your existing values". Not "the user".
-* **Name the setting exactly as it appears in the cfg**, with its default in backticks: `` `General > Min Taunt` (default `30`) ``.
-
-## Before and after
-
-| Reads like AI | Reads like a person |
+| v0.8.0 as written | House style |
 |---|---|
-| Significantly enhanced the pathfinding subsystem for a more robust navigation experience. | The Gargoyle gets stuck on corners and doorways a lot less. |
-| Refactored `HandleStealthyPursuitState` to invalidate `pathDelayTimer` on the rising edge of `isSeen`. | It reacts to being spotted straight away instead of after up to three seconds. |
-| Fixed a bug where the audio decode path did not correctly handle multi-channel input - resulting in truncated playback. | Fixed stereo voice lines being cut off halfway through. The decoder was reading them as if they were mono, so it stopped at the halfway mark. |
-| Improved config organization for better usability. | The eight hundred per-clip voice-line toggles moved to the bottom of the config file. They used to be first, which pushed every setting you might actually want past line 900. |
-
-## Things that must be said when they are true
-
-Leaving these out is how a changelog becomes untrustworthy:
-
-* **Unverified in game.** Every session in this project can build and none can play. If a change compiled but nobody has run it, say so plainly: "Not yet verified in a live round."
-* **Existing config files do not pick up new defaults.** BepInEx keeps what is on disk. If a default moved, say that the player has to delete the line or set it themselves.
-* **A behaviour change that will look like a bug.** If the Gargoyle now spreads across the crew instead of dogpiling one player, say it, or the first report will be "the new version broke targeting".
-* **Off by default.** New settings that change how the enemy behaves ship off. Say `(**off by default**)` right in the bullet.
-* **Who to thank.** Assets, renders, ideas from other people get a name.
+| **The Gargoyle actually roams while he is searching for you.** His search was restarting itself every frame, so he never got far enough to pick anywhere to go and tended to loiter near where he spawned, only noticing you if you walked close to him. Expect him to feel considerably more present. | Fixed the gargoyle loitering near its spawn instead of roaming while searching. |
+| Fixed stereo voice lines being cut off halfway through for everyone except the host. Clients decode the audio themselves and were reading stereo clips as if they were mono, so playback stopped at the halfway mark. Only one shipped line is stereo, but this also affects any custom line you add. | Fixed stereo voice lines being cut off halfway through for clients. Custom stereo lines are affected too. |
+| Large frame-rate improvement, most noticeable with more than one Gargoyle alive. While sneaking or hiding, each of them was running a full route calculation plus line-of-sight checks against every navigation point in the interior, every single frame. | Significantly improved performance when multiple gargoyles are active. |
+| `Pathfinding > Follow Players Through Exits` (**off by default**). Lets him use fire exits and the main entrance, so he can follow you between the facility and the surface. He has never been able to do this, so it stays off until you choose it. | Added a config option letting the gargoyle use fire exits and the main entrance (default off). |
 
 ## Before you call the entry done
 
-* Read it out loud. If you would not say it to someone in voice chat, rewrite it.
-* Search the new text for `—`, `–`, `’`, and `“`. There should be zero hits.
-* Check that every bullet passes the player-notices test. Delete the ones that do not and move them to `Done_YYYY-MM.md`.
-* Check the group headers against the existing file. New header means you probably miscategorised.
+* **Word-count the longest bullet.** Over 25 and it is wrong, no exceptions.
+* **Count sentences.** More than one, and the second had better be telling the player to do something.
+* Search the new text for the four banned characters. Zero hits.
+* Check every bullet passes the player-notices test. The rest go to `Done_YYYY-MM.md`.
+* Check the group headers against the file. A new header usually means a miscategorised bullet.
+* Read it out loud. If it sounds like a report, cut it in half.
